@@ -1,0 +1,51 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Labeled Features",
+        "description": "Configure the Labeled Features integration. Labels are the primary configuration surface; this form sets error handling defaults.",
+        "data": {
+          "default_error_mode": "Default error mode",
+          "alert_action": "Alert action",
+          "entity_id_suffix": "Entity ID suffix"
+        },
+        "data_description": {
+          "default_error_mode": "How errors are handled: silent, log, alert, or stop",
+          "alert_action": "Service called for the alert tier (e.g. script.send_alert)",
+          "entity_id_suffix": "Optional suffix for entity IDs (e.g. _dev for validation instances)"
+        }
+      }
+    },
+    "error": {
+      "already_configured": "Integration already configured"
+    },
+    "abort": {
+      "already_configured": "Another instance is already configured. Use entity ID suffix for additional instances."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Labeled Features Options",
+        "data": {
+          "default_error_mode": "Default error mode",
+          "alert_action": "Alert action"
+        },
+        "data_description": {
+          "default_error_mode": "How errors are handled: silent, log, alert, or stop",
+          "alert_action": "Service called for the alert tier"
+        }
+      }
+    }
+  },
+  "selector": {
+    "error_mode": {
+      "options": {
+        "silent": "Silent",
+        "log": "Log",
+        "alert": "Alert",
+        "stop": "Stop"
+      }
+    }
+  }
+}

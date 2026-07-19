@@ -1,0 +1,13 @@
+{
+  "domain": "labeled_features",
+  "name": "Labeled Features",
+  "version": "1.0.0",
+  "documentation": "https://github.com/tonylofgren/aurora-smart-home",
+  "issue_tracker": "https://github.com/tonylofgren/aurora-smart-home/issues",
+  "codeowners": ["@tonylofgren"],
+  "config_flow": true,
+  "iot_class": "calculated",
+  "integration_type": "service",
+  "requirements": [],
+  "generated_with": "aurora@aurora-smart-home (ha-integration-dev skill) | https://github.com/tonylofgren/aurora-smart-home"
+}
