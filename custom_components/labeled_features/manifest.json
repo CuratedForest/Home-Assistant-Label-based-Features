@@ -1,0 +1,9 @@
+{
+  "domain": "labeled_features",
+  "name": "Labeled Features",
+  "version": "0.1.0",
+  "documentation": "https://curatedforest.com/tech/home-assistant/label-based-features/",
+  "integration_type": "system",
+  "iot_class": "calculated",
+  "generated_with": "aurora@aurora-smart-home (ha-integration-dev skill) | https://github.com/tonylofgren/aurora-smart-home"
+}

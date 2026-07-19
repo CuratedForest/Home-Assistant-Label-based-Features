@@ -1,0 +1,74 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Labeled Features",
+        "description": "Configure error handling for the Labeled Features integration.",
+        "data": {
+          "error_mode_default": "Default error handling mode",
+          "alert_script": "Alert script (optional, used for 'alert' error mode tier)"
+        },
+        "data_description": {
+          "error_mode_default": "How to handle errors by default. 'log' writes to the system log, 'alert' sends an alert, 'silent' ignores errors, 'stop' logs and stops the action loop.",
+          "alert_script": "Script to call when error mode is 'alert'. Must accept alert_severity, alert_title, and alert_message fields."
+        }
+      },
+      "options": {
+        "title": "Labeled Features Options",
+        "description": "Configure error handling for the Labeled Features integration.",
+        "data": {
+          "error_mode_default": "Default error handling mode",
+          "alert_script": "Alert script (optional, used for 'alert' error mode tier)"
+        },
+        "data_description": {
+          "error_mode_default": "How to handle errors by default. 'log' writes to the system log, 'alert' sends an alert, 'silent' ignores errors, 'stop' logs and stops the action loop.",
+          "alert_script": "Script to call when error mode is 'alert'. Must accept alert_severity, alert_title, and alert_message fields."
+        }
+      }
+    },
+    "error": {
+      "invalid_alert_script": "The alert script is not valid or cannot be found."
+    }
+  },
+  "services": {
+    "error_mode": {
+      "name": "Handle Error",
+      "description": "Handle an error using the configured error mode tier.",
+      "fields": {
+        "error_mode": {
+          "name": "Error Mode",
+          "description": "How to handle this error: silent, log, alert, or stop."
+        },
+        "message": {
+          "name": "Message",
+          "description": "Human-readable message describing what went wrong."
+        },
+        "source": {
+          "name": "Source",
+          "description": "Short label prefixed onto logs/alerts."
+        },
+        "severity": {
+          "name": "Severity",
+          "description": "Severity level for the alert tier: low, medium, high."
+        }
+      }
+    }
+  },
+  "selector": {
+    "error_mode": {
+      "options": {
+        "silent": "Silent — ignore",
+        "log": "Log — write to system log",
+        "alert": "Alert — send notification",
+        "stop": "Stop — log and halt action loop"
+      }
+    },
+    "severity": {
+      "options": {
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High"
+      }
+    }
+  }
+}
