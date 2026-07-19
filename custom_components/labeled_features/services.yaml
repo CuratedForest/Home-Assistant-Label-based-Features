@@ -1,0 +1,50 @@
+# Services for Labeled Features component
+
+handle_error:
+  name: Handle Error
+  description: >
+    Route an error through the labeled features error handling framework.
+    Equivalent to the legacy script.labeled_feature_error_mode.
+  fields:
+    error_mode:
+      required: true
+      description: Error handling tier
+      example: "log"
+      selector:
+        select:
+          options:
+            - label: Silent
+              value: silent
+            - label: Log
+              value: log
+            - label: Alert
+              value: alert
+            - label: Stop
+              value: stop
+    message:
+      required: true
+      description: Human-readable error message
+      example: "No targets resolved for feature 'Night'."
+      selector:
+        text:
+    source:
+      required: false
+      default: "Labeled Features"
+      description: Short label for the error source
+      example: "Labeled Feature Generics"
+      selector:
+        text:
+    severity:
+      required: false
+      default: "medium"
+      description: Severity level for the alert tier
+      example: "high"
+      selector:
+        select:
+          options:
+            - label: Low
+              value: low
+            - label: Medium
+              value: medium
+            - label: High
+              value: high

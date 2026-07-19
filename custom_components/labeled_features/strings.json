@@ -1,0 +1,40 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Labeled Features",
+        "description": "Labeled Features is a label-driven feature management system. No additional configuration is required."
+      },
+      "init": {
+        "title": "Labeled Features",
+        "data": {
+          "enabled": "Enable Labeled Features"
+        }
+      }
+    }
+  },
+  "services": {
+    "handle_error": {
+      "name": "Handle Error",
+      "description": "Route an error through the labeled features error handling framework.",
+      "fields": {
+        "error_mode": {
+          "name": "Error Mode",
+          "description": "Error handling tier: silent, log, alert, or stop."
+        },
+        "message": {
+          "name": "Message",
+          "description": "Human-readable error message."
+        },
+        "source": {
+          "name": "Source",
+          "description": "Short label for the error source."
+        },
+        "severity": {
+          "name": "Severity",
+          "description": "Severity level for the alert tier."
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "domain": "labeled_features",
+  "name": "Labeled Features",
+  "version": "0.1.0",
+  "documentation": "https://github.com/tonylofgren/Home-Assistant-Label-based-Features",
+  "issue_tracker": "https://github.com/tonylofgren/Home-Assistant-Label-based-Features/issues",
+  "codeowners": ["@tonylofgren"],
+  "config_flow": true,
+  "iot_class": "local_polling",
+  "requirements": [],
+  "homeassistant": "2025.1.0",
+  "generated_with": "aurora@aurora-smart-home (ha-integration-dev skill) | https://github.com/tonylofgren/aurora-smart-home"
+}
