@@ -15,7 +15,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Event, HomeAssistant, State, callback
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers import label as label_helper
+from homeassistant.helpers import label_registry as label_helper
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
@@ -255,10 +255,14 @@ class LabeledFeaturesCoordinator(DataUpdateCoordinator[dict]):
 
     def _resolve_label_ids(self, label_ids: set[str]) -> list[str]:
         """Resolve label IDs to their names."""
+        try:
+            lr = label_helper.async_get(self.hass)
+        except Exception:
+            return []
         result: list[str] = []
         for lid in label_ids:
             try:
-                lbl = label_helper.async_get(self.hass, lid)
+                lbl = lr.async_get(lid)
                 if lbl:
                     result.append(lbl.name)
             except Exception:
@@ -291,39 +295,41 @@ class LabeledFeaturesCoordinator(DataUpdateCoordinator[dict]):
         """Resolve entity IDs for a label name."""
         try:
             reg = er.async_get(self.hass)
-            result: list[str] = []
-            for entry in reg.entities.values():
-                if entry.labels:
-                    for lid in entry.labels:
-                        try:
-                            lbl = label_helper.async_get(self.hass, lid)
-                            if lbl and lbl.name == label_name:
-                                result.append(entry.entity_id)
-                                break
-                        except Exception:
-                            continue
-            return result
+            lr = label_helper.async_get(self.hass)
         except Exception:
             return []
+        result: list[str] = []
+        for entry in reg.entities.values():
+            if entry.labels:
+                for lid in entry.labels:
+                    try:
+                        lbl = lr.async_get(lid)
+                        if lbl and lbl.name == label_name:
+                            result.append(entry.entity_id)
+                            break
+                    except Exception:
+                        continue
+        return result
 
     def _resolve_label_areas(self, label_name: str) -> list[str]:
         """Resolve area IDs that have the label directly attached."""
         try:
             areg = ar.async_get(self.hass)
-            result: list[str] = []
-            for area in areg.async_list_areas():
-                if area.labels:
-                    for lid in area.labels:
-                        try:
-                            lbl = label_helper.async_get(self.hass, lid)
-                            if lbl and lbl.name == label_name:
-                                result.append(area.id)
-                                break
-                        except Exception:
-                            continue
-            return result
+            lr = label_helper.async_get(self.hass)
         except Exception:
             return []
+        result: list[str] = []
+        for area in areg.async_list_areas():
+            if area.labels:
+                for lid in area.labels:
+                    try:
+                        lbl = lr.async_get(lid)
+                        if lbl and lbl.name == label_name:
+                            result.append(area.id)
+                            break
+                    except Exception:
+                        continue
+        return result
 
     # ------------------------------------------------------------------
     # Build routines
