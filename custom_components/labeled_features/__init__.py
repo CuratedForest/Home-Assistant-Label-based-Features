@@ -6,7 +6,6 @@ https://github.com/tonylofgren/aurora-smart-home
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import re
 from typing import Any, Callable
@@ -19,8 +18,6 @@ from homeassistant.core import (
     callback,
 )
 from homeassistant.helpers import area_registry as ar
-from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers import floor_registry as fr
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -133,12 +130,18 @@ class LabeledFeaturesManager:
         return obj
 
     def get_alert_script(self) -> str:
-        """Get the alert script entity_id."""
-        return self._alert_script
+        """Get the alert script entity_id (options override data)."""
+        opts = self.entry.options.get(ENTRY_DATA_ALERT_SCRIPT, "")
+        return opts if opts else self.entry.data.get(
+            ENTRY_DATA_ALERT_SCRIPT, ""
+        )
 
     def get_error_mode_default(self) -> str:
-        """Get the default error mode."""
-        return self._error_mode_default
+        """Get the default error mode (options override data)."""
+        opts = self.entry.options.get(ENTRY_DATA_ERROR_MODE_DEFAULT, "")
+        return opts if opts else self.entry.data.get(
+            ENTRY_DATA_ERROR_MODE_DEFAULT, DEFAULT_ERROR_MODE
+        )
 
     async def async_setup(self) -> None:
         """Set up event listeners and initial state."""
@@ -1078,3 +1081,33 @@ class LabeledFeaturesManager:
                 _LOGGER.error(
                     "Error notifying areas sensor callback", exc_info=True
                 )
+
+
+PLATFORMS: list[str] = ["sensor"]
+
+type LabeledFeaturesConfigEntry = ConfigEntry[LabeledFeaturesManager]
+
+
+async def async_setup_entry(hass, entry: LabeledFeaturesConfigEntry) -> bool:
+    """Set up labeled_features from a config entry."""
+    manager = LabeledFeaturesManager(hass, entry)
+    await manager.async_setup()
+    entry.runtime_data = manager
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
+    return True
+
+
+async def async_unload_entry(hass, entry: LabeledFeaturesConfigEntry) -> bool:
+    """Unload a config entry."""
+    manager = entry.runtime_data
+    await manager.async_will_remove_from_hass()
+    ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if ok:
+        entry.runtime_data = None
+    return ok
+
+
+async def _async_update_listener(hass, entry):
+    """Handle options update — reload to apply changes."""
+    await hass.config_entries.async_reload(entry.entry_id)

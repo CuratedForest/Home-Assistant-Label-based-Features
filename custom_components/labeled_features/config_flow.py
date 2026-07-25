@@ -68,7 +68,14 @@ class LabeledFeaturesConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             return self.async_create_entry(
                 title="Labeled Features",
-                data=user_input,
+                data={
+                    ENTRY_DATA_ALERT_SCRIPT: user_input.get(
+                        CONF_ALERT_SCRIPT, ""
+                    ),
+                    ENTRY_DATA_ERROR_MODE_DEFAULT: user_input.get(
+                        CONF_ERROR_MODE_DEFAULT, DEFAULT_ERROR_MODE
+                    ),
+                },
             )
 
         return self.async_show_form(
@@ -91,7 +98,14 @@ class LabeledFeaturesOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             return self.async_create_entry(
                 title="",
-                data=user_input,
+                data={
+                    ENTRY_DATA_ALERT_SCRIPT: user_input.get(
+                        CONF_ALERT_SCRIPT, ""
+                    ),
+                    ENTRY_DATA_ERROR_MODE_DEFAULT: user_input.get(
+                        CONF_ERROR_MODE_DEFAULT, DEFAULT_ERROR_MODE
+                    ),
+                },
             )
 
         options = self.config_entry.options
