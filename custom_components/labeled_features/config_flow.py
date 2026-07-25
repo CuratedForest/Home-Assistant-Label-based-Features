@@ -1,17 +1,18 @@
 """Config flow for Labeled Features.
 
-Minimal — just enable/disable. All configuration is label-driven.
+Minimal, single-instance — just an enable/disable option. All feature
+configuration is label-driven; config subentry inputs are deferred to a
+later part.
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-import voluptuous as vol
-
 from homeassistant import config_entries
-from homeassistant.core import HomeAssistant
-from homeassistant.data_entry_flow import FlowResult
+from homeassistant.config_entries import ConfigFlowResult
+from homeassistant.core import callback
+import voluptuous as vol
 
 from .const import CONF_ENABLED, DOMAIN
 
@@ -23,42 +24,36 @@ class LabeledFeaturesConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Handle a user init flow."""
+        await self.async_set_unique_id(DOMAIN)
+        self._abort_if_unique_id_configured()
+
         if user_input is not None:
             return self.async_create_entry(title="Labeled Features", data={})
 
-        return self.async_show_form(
-            step_id="user",
-            last_step=True,
-        )
+        return self.async_show_form(step_id="user", last_step=True)
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: config_entries.ConfigEntry,
+    ) -> LabeledFeaturesOptionsFlow:
+        """Create the options flow."""
+        return LabeledFeaturesOptionsFlow()
 
 
 class LabeledFeaturesOptionsFlow(config_entries.OptionsFlow):
-    """Handle options flow."""
-
-    def __init__(self, hass: HomeAssistant, entry: config_entries.ConfigEntry) -> None:
-        """Initialize options flow."""
-        self.hass = hass
-        self.entry = entry
+    """Handle options flow (enable/disable only)."""
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
-    ) -> FlowResult:
+    ) -> ConfigFlowResult:
         """Manage the options."""
         if user_input is not None:
-            enabled = user_input.get(CONF_ENABLED, True)
-            self.hass.data["labeled_features"]["features_coordinator"].is_disabled = (
-                not enabled
-            )
-            self.hass.data["labeled_features"]["areas_coordinator"].is_disabled = (
-                not enabled
-            )
-            return self.async_create_entry(
-                title="Labeled Features", data=user_input
-            )
+            return self.async_create_entry(title="", data=user_input)
 
-        options = self.entry.options
+        options = self.config_entry.options
         return self.async_show_form(
             step_id="init",
             data_schema=vol.Schema(

@@ -4,13 +4,26 @@
       "user": {
         "title": "Labeled Features",
         "description": "Labeled Features is a label-driven feature management system. No additional configuration is required."
-      },
+      }
+    },
+    "abort": {
+      "single_instance_allowed": "Already configured. Only a single instance is possible."
+    }
+  },
+  "options": {
+    "step": {
       "init": {
         "title": "Labeled Features",
         "data": {
           "enabled": "Enable Labeled Features"
         }
       }
+    }
+  },
+  "issues": {
+    "entity_id_collision": {
+      "title": "Labeled Features entity id collision",
+      "description": "Expected to create `{expected}` but the entity was registered as `{actual}` because another entity (likely the legacy template sensor) already owns that id. Downstream automations and scripts read `{expected}` and will not see this integration's data. Remove the legacy template sensor from configuration.yaml, delete `{actual}` from the entity registry, and reload the integration."
     }
   },
   "services": {
