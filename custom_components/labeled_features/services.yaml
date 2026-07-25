@@ -1,50 +1,49 @@
-# Services for Labeled Features component
-
-handle_error:
-  name: Handle Error
+report_error:
+  name: Report Error
   description: >
-    Route an error through the labeled features error handling framework.
-    Equivalent to the legacy script.labeled_feature_error_mode.
+    Dispatch an error through the shared Labeled Features error handler.
+    Mirrors `script.labeled_feature_error_mode` so component-internal and
+    YAML-script error paths behave identically.
   fields:
     error_mode:
-      required: true
-      description: Error handling tier
-      example: "log"
+      name: Error Mode
+      description: silent | log | alert | stop. Default 'log'.
+      required: false
+      default: log
       selector:
         select:
+          custom_value: true
           options:
-            - label: Silent
-              value: silent
-            - label: Log
-              value: log
-            - label: Alert
-              value: alert
-            - label: Stop
-              value: stop
+            - silent
+            - log
+            - alert
+            - stop
     message:
+      name: Message
+      description: Human-readable message describing what went wrong.
       required: true
-      description: Human-readable error message
-      example: "No targets resolved for feature 'Night'."
       selector:
         text:
+          multiline: true
     source:
+      name: Source
+      description: >
+        Short label for the calling script, used as a prefix in logs and
+        alerts. Examples: "Labeled Feature Generics", "Labeled Features
+        Component".
       required: false
-      default: "Labeled Features"
-      description: Short label for the error source
-      example: "Labeled Feature Generics"
+      default: Labeled Feature
       selector:
-        text:
+        text: {}
     severity:
+      name: Severity
+      description: Severity for the alert tier (low | medium | high).
       required: false
-      default: "medium"
-      description: Severity level for the alert tier
-      example: "high"
+      default: medium
       selector:
         select:
+          custom_value: true
           options:
-            - label: Low
-              value: low
-            - label: Medium
-              value: medium
-            - label: High
-              value: high
+            - low
+            - medium
+            - high

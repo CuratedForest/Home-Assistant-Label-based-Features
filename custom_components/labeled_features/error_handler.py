@@ -1,10 +1,12 @@
-"""Error handling framework for Labeled Features.
+"""Component-internal error handler mirroring script.labeled_feature_error_mode.
 
-Provides the silent/log/alert/stop error tiers. The `stop` tier raises
-`ErrorStop` which callers catch to halt their action loop.
+Four tiers: silent / log / alert / stop. Exposed both as a Python helper
+callable from anywhere inside the component and as a public HA service
+`labeled_features.report_error` so scripts (or downstream integrations)
+can dispatch through the same code path if they want to.
 
-A service `labeled_features.handle_error` is exposed for backward
-compatibility with the legacy `script.labeled_feature_error_mode`.
+Existing YAML scripts continue to call `script.labeled_feature_error_mode`
+unchanged; this module does not delete or replace that script.
 """
 
 from __future__ import annotations
@@ -12,66 +14,128 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+import voluptuous as vol
 from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import HomeAssistantError, ServiceNotFound
+from homeassistant.helpers import config_validation as cv
 
-from .const import ERROR_ALERT, ERROR_LOG, ERROR_SILENT, ERROR_STOP
+from .const import DOMAIN, ERROR_MODES, SERVICE_REPORT_ERROR
 
 _LOGGER = logging.getLogger(__name__)
 
+REPORT_ERROR_SCHEMA = vol.Schema(
+    {
+        vol.Optional("error_mode", default="log"): vol.In(ERROR_MODES),
+        vol.Required("message"): cv.string,
+        vol.Optional("source", default="Labeled Feature"): cv.string,
+        vol.Optional("severity", default="medium"): cv.string,
+    }
+)
 
-class ErrorStop(Exception):
-    """Raised by the 'stop' error mode to halt execution."""
 
-    def __init__(self, message: str) -> None:
-        super().__init__(message)
-        self.message = message
-
-
-async def handle_error(
-    error_mode: str,
+async def report_error(
+    hass: HomeAssistant,
+    *,
+    error_mode: str = "log",
     message: str,
-    source: str = "Labeled Features",
+    source: str = "Labeled Feature",
     severity: str = "medium",
 ) -> None:
-    """Route an error through the appropriate tier.
+    """Report an error through the requested tier.
 
-    Args:
-        error_mode: One of silent, log, alert, stop.
-        message: Human-readable error message.
-        source: Short label for the error source.
-        severity: Severity level for alert tier (low, medium, high).
-
-    Raises:
-        ErrorStop: When error_mode is 'stop'.
+    ``stop`` raises `HomeAssistantError` after logging so callers that
+    need to abort a task get the same halt semantics that
+    `script.labeled_feature_error_mode` provides via ``stop: error: true``
+    (the caller is still responsible for propagating; nothing outside
+    this coroutine is halted).
     """
-    if error_mode == ERROR_SILENT:
+
+    mode = (error_mode or "log").strip().lower()
+    if mode not in ERROR_MODES:
+        # Match the script's default when handed an unknown tier.
+        _LOGGER.warning(
+            "%s: unknown error_mode '%s', falling back to 'log'", source, mode
+        )
+        mode = "log"
+
+    if mode == "silent":
         return
 
-    formatted = f"[{source}] {message}"
+    if mode == "log":
+        _LOGGER.warning("%s: %s", source, message)
+        return
 
-    if error_mode == ERROR_LOG:
-        _LOGGER.error(formatted)
+    if mode == "alert":
+        payload: dict[str, Any] = {
+            "alert_severity": severity,
+            "alert_title": source,
+            "alert_message": message,
+        }
+        try:
+            await hass.services.async_call(
+                "script",
+                "send_alert",
+                payload,
+                blocking=False,
+            )
+        except ServiceNotFound:
+            # Fall back to a persistent notification so the alert is at
+            # least visible in the UI.
+            try:
+                await hass.services.async_call(
+                    "persistent_notification",
+                    "create",
+                    {
+                        "title": source,
+                        "message": message,
+                        "notification_id": f"{DOMAIN}_alert",
+                    },
+                    blocking=False,
+                )
+            except Exception:  # noqa: BLE001 - defensive last-ditch fallback
+                _LOGGER.warning(
+                    "%s: %s (alert fallback: persistent_notification unavailable)",
+                    source,
+                    message,
+                )
+                return
+            _LOGGER.warning("%s: %s (script.send_alert unavailable)", source, message)
+        return
 
-    elif error_mode == ERROR_ALERT:
-        _LOGGER.warning("Alert not implemented: %s", formatted)
-
-    elif error_mode == ERROR_STOP:
-        _LOGGER.error(formatted)
-        raise ErrorStop(formatted)
+    # mode == "stop"
+    _LOGGER.error("%s: %s", source, message)
+    raise HomeAssistantError(f"{source}: {message}")
 
 
-async def async_handle_error_service(
-    hass: HomeAssistant,
-    service_call: ServiceCall,
-) -> None:
-    """Service handler for labeled_features.handle_error.
+def async_register_service(hass: HomeAssistant) -> None:
+    """Register `labeled_features.report_error` if not already present.
 
-    Exposes error handling to scripts and automations for backward
-    compatibility with the existing script.labeled_feature_error_mode.
+    Safe to call multiple times — subsequent calls are no-ops.
     """
-    error_mode = service_call.data.get("error_mode", ERROR_LOG)
-    message = service_call.data.get("message", "")
-    source = service_call.data.get("source", "Labeled Features")
-    severity = service_call.data.get("severity", "medium")
 
-    await handle_error(error_mode, message, source, severity)
+    if hass.services.has_service(DOMAIN, SERVICE_REPORT_ERROR):
+        return
+
+    async def _handle(call: ServiceCall) -> None:
+        # Bounce any exception from `stop` back so HA logs the service
+        # error correctly; callers awaiting `blocking=True` will see it.
+        await report_error(
+            hass,
+            error_mode=call.data.get("error_mode", "log"),
+            message=call.data["message"],
+            source=call.data.get("source", "Labeled Feature"),
+            severity=call.data.get("severity", "medium"),
+        )
+
+    hass.services.async_register(
+        DOMAIN, SERVICE_REPORT_ERROR, _handle, schema=REPORT_ERROR_SCHEMA
+    )
+
+
+def async_unregister_service_if_last(hass: HomeAssistant, active_entries: int) -> None:
+    """Remove the service when the final config entry is unloaded."""
+
+    if active_entries > 0:
+        return
+    if hass.services.has_service(DOMAIN, SERVICE_REPORT_ERROR):
+        hass.services.async_remove(DOMAIN, SERVICE_REPORT_ERROR)

@@ -2,25 +2,69 @@
   "config": {
     "step": {
       "user": {
-        "title": "Labeled Features",
-        "description": "Labeled Features is a label-driven feature management system. No additional configuration is required."
-      },
-      "init": {
-        "title": "Labeled Features",
+        "title": "Add Labeled Features instance",
+        "description": "One config entry per Labeled Features instance. Most setups need only one; add a second for a testing sandbox with its own disjoint leader label and entity IDs.",
         "data": {
-          "enabled": "Enable Labeled Features"
+          "instance_name": "Instance name",
+          "leader_label": "Leader label",
+          "features_state_entity_id": "Features state entity ID",
+          "areas_state_entity_id": "Areas state entity ID",
+          "error_mode_default": "Error Mode default",
+          "script_call_mode_default": "Script Call Mode default"
+        },
+        "data_description": {
+          "instance_name": "Free-form title shown in the UI.",
+          "leader_label": "Entities carrying this label participate in this instance. Defaults to `feature_leader` so existing setups keep working.",
+          "features_state_entity_id": "Entity ID for the leader/feature state sensor. Leave the default so existing scripts and automations keep resolving it.",
+          "areas_state_entity_id": "Entity ID for the areas-registry sensor.",
+          "error_mode_default": "Applied as a managed label on the features-state sensor; downstream scripts read it via `labels()`.",
+          "script_call_mode_default": "Applied as a managed label on the features-state sensor; downstream scripts read it via `labels()`."
         }
       }
+    },
+    "error": {
+      "leader_label_required": "Leader label cannot be empty.",
+      "invalid_entity_id": "Must be a valid `sensor.*` entity ID.",
+      "duplicate_leader_label": "Another Labeled Features instance already uses this leader label.",
+      "duplicate_entity_id": "Another Labeled Features instance already uses this entity ID.",
+      "entity_id_conflict": "Features and Areas sensors must use different entity IDs.",
+      "entity_id_taken": "That entity ID already exists in Home Assistant. Remove the legacy template sensor (in `configuration.yaml`) before creating the instance."
+    },
+    "abort": {
+      "already_configured": "An instance with this name already exists."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Labeled Features options",
+        "description": "Reload the integration when saving to apply the changes.",
+        "data": {
+          "leader_label": "Leader label",
+          "features_state_entity_id": "Features state entity ID",
+          "areas_state_entity_id": "Areas state entity ID",
+          "error_mode_default": "Error Mode default",
+          "script_call_mode_default": "Script Call Mode default"
+        }
+      }
+    },
+    "error": {
+      "leader_label_required": "Leader label cannot be empty.",
+      "invalid_entity_id": "Must be a valid `sensor.*` entity ID.",
+      "duplicate_leader_label": "Another Labeled Features instance already uses this leader label.",
+      "duplicate_entity_id": "Another Labeled Features instance already uses this entity ID.",
+      "entity_id_conflict": "Features and Areas sensors must use different entity IDs.",
+      "entity_id_taken": "That entity ID already exists in Home Assistant."
     }
   },
   "services": {
-    "handle_error": {
-      "name": "Handle Error",
-      "description": "Route an error through the labeled features error handling framework.",
+    "report_error": {
+      "name": "Report Error",
+      "description": "Dispatch an error through the shared Labeled Features error handler.",
       "fields": {
         "error_mode": {
           "name": "Error Mode",
-          "description": "Error handling tier: silent, log, alert, or stop."
+          "description": "silent | log | alert | stop."
         },
         "message": {
           "name": "Message",
@@ -28,11 +72,11 @@
         },
         "source": {
           "name": "Source",
-          "description": "Short label for the error source."
+          "description": "Short label prefixed onto logs and alerts."
         },
         "severity": {
           "name": "Severity",
-          "description": "Severity level for the alert tier."
+          "description": "Severity for the alert tier."
         }
       }
     }

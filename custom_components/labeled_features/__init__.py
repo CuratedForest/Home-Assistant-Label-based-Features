@@ -1,81 +1,107 @@
-"""Labeled Features custom component.
-
-Minimal config — all configuration is label-driven.
-"""
+"""The Labeled Features integration."""
 
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, PLATFORMS
-from .coordinator import (
-    LabeledFeatureAreasCoordinator,
-    LabeledFeaturesCoordinator,
+from .const import (
+    DATA_ENTRIES,
+    DATA_SERVICE_REGISTERED,
+    DOMAIN,
+    PLATFORMS,
 )
-from .services import async_setup_services
+from .coordinator import (
+    LabeledFeatureAreasStateCoordinator,
+    LabeledFeaturesStateCoordinator,
+)
+from .error_handler import (
+    async_register_service,
+    async_unregister_service_if_last,
+)
+from .label_sync import async_sync_labels, async_unbind_managed_labels
 
 _LOGGER = logging.getLogger(__name__)
 
 
-async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry
-) -> bool:
-    """Set up Labeled Features from a config entry."""
-    _LOGGER.info("Setting up Labeled Features integration")
+async def async_setup(hass: HomeAssistant, _config: dict) -> bool:
+    """YAML setup is not supported; config entries only."""
 
-    # Create coordinators
-    features_coordinator = LabeledFeaturesCoordinator(hass)
-    areas_coordinator = LabeledFeatureAreasCoordinator(hass)
-
-    # Set up coordinators (register event listeners)
-    await features_coordinator.async_setup()
-    await areas_coordinator.async_setup()
-
-    # Store in hass.data for sensor access
-    if "labeled_features" not in hass.data:
-        hass.data["labeled_features"] = {}
-    hass.data["labeled_features"]["features_coordinator"] = features_coordinator
-    hass.data["labeled_features"]["areas_coordinator"] = areas_coordinator
-
-    # Set up services
-    await async_setup_services(hass)
-
-    # Forward platform setup
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-
+    hass.data.setdefault(DOMAIN, {})
     return True
 
 
-async def async_unload_entry(
-    hass: HomeAssistant, entry: ConfigEntry
-) -> bool:
-    """Unload a config entry."""
-    unload_ok = await hass.config_entries.async_unload_platforms(
-        entry, PLATFORMS
-    )
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up one Labeled Features instance."""
 
-    if unload_ok:
-        features_coordinator = hass.data["labeled_features"]["features_coordinator"]
-        areas_coordinator = hass.data["labeled_features"]["areas_coordinator"]
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    entries = domain_data.setdefault(DATA_ENTRIES, {})
 
-        await features_coordinator.async_shutdown()
-        await areas_coordinator.async_shutdown()
+    features_coord = LabeledFeaturesStateCoordinator(hass, entry)
+    areas_coord = LabeledFeatureAreasStateCoordinator(hass, entry)
 
-        # Clean up hass.data
-        if "labeled_features" in hass.data:
-            del hass.data["labeled_features"]
+    features_coord.async_subscribe()
+    areas_coord.async_subscribe()
 
-    return unload_ok
+    # Let both first-refresh failures propagate. `async_config_entry_first_refresh`
+    # raises `ConfigEntryNotReady` on `UpdateFailed`, and HA will retry setup
+    # with backoff. Swallowing the exception here would leave the areas
+    # coordinator with an empty `data` dict, which — combined with a
+    # recorder-restored non-empty prior `label_map` — would cause
+    # `automation.labeled_feature_areas` to diff every previously-known entry
+    # as removed and retract every dispatched MQTT-discovery topic.
+    await areas_coord.async_config_entry_first_refresh()
+    await features_coord.async_config_entry_first_refresh()
+
+    entries[entry.entry_id] = {
+        "features": features_coord,
+        "areas": areas_coord,
+    }
+
+    # Public service (idempotent across entries).
+    if not domain_data.get(DATA_SERVICE_REGISTERED):
+        async_register_service(hass)
+        domain_data[DATA_SERVICE_REGISTERED] = True
+
+    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # After the sensor platform finishes, its entity registry entry
+    # exists — sync managed labels onto it.
+    await async_sync_labels(hass, entry)
+
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
+    return True
 
 
-async def async_remove_entry(
-    hass: HomeAssistant, entry: ConfigEntry
-) -> None:
-    """Remove a config entry."""
-    if "labeled_features" in hass.data:
-        del hass.data["labeled_features"]
+async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload the entry when options change so context is re-read."""
+
+    await hass.config_entries.async_reload(entry.entry_id)
+
+
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Tear down an entry cleanly."""
+
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if not unload_ok:
+        return False
+
+    domain_data = hass.data.setdefault(DOMAIN, {})
+    entries = domain_data.setdefault(DATA_ENTRIES, {})
+    entry_data = entries.pop(entry.entry_id, None)
+    if entry_data is not None:
+        entry_data["features"].async_unsubscribe()
+        entry_data["areas"].async_unsubscribe()
+
+    async_unregister_service_if_last(hass, len(entries))
+    if not entries:
+        domain_data[DATA_SERVICE_REGISTERED] = False
+    return True
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Clean up managed labels when the entry is deleted."""
+
+    await async_unbind_managed_labels(hass, entry)
