@@ -2,37 +2,36 @@
   "config": {
     "step": {
       "user": {
-        "title": "Labeled Features",
-        "description": "Labeled Features is a label-driven feature management system. No additional configuration is required."
-      },
-      "init": {
-        "title": "Labeled Features",
+        "title": "Labeled Features Instance",
+        "description": "Create a new Labeled Features instance. Each instance watches a set of labels to drive automations.",
         "data": {
-          "enabled": "Enable Labeled Features"
+          "instance_name": "Instance Name",
+          "leader_label": "Leader Label",
+          "feature_prefix": "Feature Label Prefix"
+        },
+        "data_description": {
+          "instance_name": "A unique name for this instance. Used in entity naming.",
+          "leader_label": "The label ID that marks entities as feature leaders. Default: feature_leader",
+          "feature_prefix": "Optional prefix for all feature-related labels. Leave empty for no prefix."
         }
       }
+    },
+    "error": {
+      "empty_name": "Instance name cannot be empty.",
+      "empty_leader_label": "Leader label cannot be empty."
+    },
+    "abort": {
+      "already_configured": "An instance with this name is already configured."
     }
   },
-  "services": {
-    "handle_error": {
-      "name": "Handle Error",
-      "description": "Route an error through the labeled features error handling framework.",
-      "fields": {
-        "error_mode": {
-          "name": "Error Mode",
-          "description": "Error handling tier: silent, log, alert, or stop."
-        },
-        "message": {
-          "name": "Message",
-          "description": "Human-readable error message."
-        },
-        "source": {
-          "name": "Source",
-          "description": "Short label for the error source."
-        },
-        "severity": {
-          "name": "Severity",
-          "description": "Severity level for the alert tier."
+  "options": {
+    "step": {
+      "init": {
+        "title": "Labeled Features Options",
+        "description": "Update the configuration for this Labeled Features instance.",
+        "data": {
+          "leader_label": "Leader Label",
+          "feature_prefix": "Feature Label Prefix"
         }
       }
     }

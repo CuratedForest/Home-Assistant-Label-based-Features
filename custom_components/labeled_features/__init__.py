@@ -1,81 +1,67 @@
-"""Labeled Features custom component.
-
-Minimal config — all configuration is label-driven.
-"""
-
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, PLATFORMS
-from .coordinator import (
-    LabeledFeatureAreasCoordinator,
-    LabeledFeaturesCoordinator,
+from .const import (
+    CONF_FEATURE_PREFIX,
+    CONF_INSTANCE_NAME,
+    CONF_LEADER_LABEL,
+    DEFAULT_FEATURE_PREFIX,
+    DEFAULT_LEADER_LABEL,
+    DOMAIN,
 )
-from .services import async_setup_services
+from .coordinator import LabeledFeaturesCoordinator
+from .services import async_register_services, async_unregister_services
 
 _LOGGER = logging.getLogger(__name__)
 
+PLATFORMS = [Platform.SENSOR]
 
-async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry
-) -> bool:
-    """Set up Labeled Features from a config entry."""
-    _LOGGER.info("Setting up Labeled Features integration")
 
-    # Create coordinators
-    features_coordinator = LabeledFeaturesCoordinator(hass)
-    areas_coordinator = LabeledFeatureAreasCoordinator(hass)
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    hass.data.setdefault(DOMAIN, {})
 
-    # Set up coordinators (register event listeners)
-    await features_coordinator.async_setup()
-    await areas_coordinator.async_setup()
+    instance_name = entry.data[CONF_INSTANCE_NAME]
+    leader_label = entry.data.get(CONF_LEADER_LABEL, DEFAULT_LEADER_LABEL)
+    feature_prefix = entry.data.get(CONF_FEATURE_PREFIX, DEFAULT_FEATURE_PREFIX)
 
-    # Store in hass.data for sensor access
-    if "labeled_features" not in hass.data:
-        hass.data["labeled_features"] = {}
-    hass.data["labeled_features"]["features_coordinator"] = features_coordinator
-    hass.data["labeled_features"]["areas_coordinator"] = areas_coordinator
+    coordinator = LabeledFeaturesCoordinator(
+        hass=hass,
+        entry_id=entry.entry_id,
+        instance_name=instance_name,
+        leader_label=leader_label,
+        feature_prefix=feature_prefix,
+    )
 
-    # Set up services
-    await async_setup_services(hass)
+    await coordinator.async_setup()
 
-    # Forward platform setup
+    hass.data[DOMAIN][entry.entry_id] = coordinator
+
+    await async_register_services(hass)
+
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     return True
 
 
-async def async_unload_entry(
-    hass: HomeAssistant, entry: ConfigEntry
-) -> bool:
-    """Unload a config entry."""
-    unload_ok = await hass.config_entries.async_unload_platforms(
-        entry, PLATFORMS
-    )
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
     if unload_ok:
-        features_coordinator = hass.data["labeled_features"]["features_coordinator"]
-        areas_coordinator = hass.data["labeled_features"]["areas_coordinator"]
-
-        await features_coordinator.async_shutdown()
-        await areas_coordinator.async_shutdown()
-
-        # Clean up hass.data
-        if "labeled_features" in hass.data:
-            del hass.data["labeled_features"]
+        coordinator: LabeledFeaturesCoordinator = hass.data[DOMAIN].pop(entry.entry_id)
+        await coordinator.async_shutdown()
+        await async_unregister_services(hass)
 
     return unload_ok
 
 
-async def async_remove_entry(
+async def _async_update_listener(
     hass: HomeAssistant, entry: ConfigEntry
 ) -> None:
-    """Remove a config entry."""
-    if "labeled_features" in hass.data:
-        del hass.data["labeled_features"]
+    await hass.config_entries.async_reload(entry.entry_id)

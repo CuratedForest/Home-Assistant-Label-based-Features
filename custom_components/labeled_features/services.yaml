@@ -1,50 +1,45 @@
-# Services for Labeled Features component
-
-handle_error:
-  name: Handle Error
-  description: >
-    Route an error through the labeled features error handling framework.
-    Equivalent to the legacy script.labeled_feature_error_mode.
-  fields:
-    error_mode:
-      required: true
-      description: Error handling tier
-      example: "log"
-      selector:
-        select:
-          options:
-            - label: Silent
-              value: silent
-            - label: Log
-              value: log
-            - label: Alert
-              value: alert
-            - label: Stop
-              value: stop
-    message:
-      required: true
-      description: Human-readable error message
-      example: "No targets resolved for feature 'Night'."
-      selector:
-        text:
-    source:
-      required: false
-      default: "Labeled Features"
-      description: Short label for the error source
-      example: "Labeled Feature Generics"
-      selector:
-        text:
-    severity:
-      required: false
-      default: "medium"
-      description: Severity level for the alert tier
-      example: "high"
-      selector:
-        select:
-          options:
-            - label: Low
-              value: low
-            - label: Medium
-              value: medium
-            - label: High
-              value: high
+domain: labeled_features
+services:
+  error_mode:
+    name: Error Mode
+    description: >
+      Dispatch an error through the Labeled Features error handling system.
+      Supports silent (no-op), log (warning), alert (persistent notification),
+      and stop (error log; caller must halt execution separately).
+    fields:
+      error_mode:
+        name: Error Mode
+        description: "The error handling tier: silent, log, alert, or stop."
+        required: true
+        selector:
+          select:
+            options:
+              - silent
+              - log
+              - alert
+              - stop
+      message:
+        name: Message
+        description: Human-readable error message.
+        required: true
+        selector:
+          text:
+      source:
+        name: Source
+        description: Short label prefixed onto logs and alerts.
+        required: false
+        default: "Labeled Feature"
+        selector:
+          text:
+      severity:
+        name: Severity
+        description: Severity level for the alert tier.
+        required: false
+        default: "medium"
+        selector:
+          select:
+            options:
+              - low
+              - medium
+              - high
+              - critical
