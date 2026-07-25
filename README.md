@@ -10,50 +10,54 @@ A Home Assistant custom integration implementing the state layer of the
 system: drive automations from entity labels and area/floor metadata via a
 leader/follower pattern, with no per-device automation sprawl.
 
-This integration replaces the two production trigger-based template sensors
-(`sensor.labeled_features_state` and `sensor.labeled_feature_areas_state`)
-with byte-compatible native sensors, adds tiered error handling, and keeps
-every downstream consumer (the Leaders/Areas automations and the
-`labeled_feature_*` scripts) working unchanged.
+## Phase 1 scope
+
+This is the **state + error handling** layer only. The two production
+trigger-based template sensors are replaced with native Python sensors that
+expose byte-compatible state and attributes, so every downstream consumer
+(`automation.labeled_feature_leaders`, `automation.labeled_feature_areas`,
+and every `script.labeled_feature_*`) keeps working without modification.
+
+Phase 1 does **not** touch the leaders automation, the areas automation, or
+any of the `labeled_feature_*` scripts. Those remain in `automations.yaml`
+and `scripts.yaml`.
 
 ## What this does
 
-Two sensors per instance (default entity IDs, optional per-instance suffix):
+Two sensors per instance (fully overridable entity IDs):
 
 - **`sensor.labeled_features_state`** — state is the count of leader
   entities. Attributes:
   - `feature_meta` — static catalog of the generic features (Media */
     Volume */Lights */Fan *).
-  - `leaders` — per-leader `{current_value, previous_value,
-    last_changed_timestamp}`. Skip-values (`*_initial_press`,
-    unknown/unavailable/none) carry the previous entry through.
-  - `features` — `feature → scope → scope_id → {enabled, mode,
-    last_changed_timestamp, triggering_leader}`. Global scope uses `''`
+  - `leaders` — `{entity_id: {current_value, previous_value,
+    last_changed_timestamp}}`. Skip values (`*_initial_press`,
+    `unknown`/`unavailable`/`none`) carry the previous entry through.
+  - `features` — `{feature: {scope: {scope_id: {enabled, mode,
+    last_changed_timestamp, triggering_leader}}}}`. Global scope uses `''`
     as the scope_id key.
   - `snapshots` — persisted mapping surface for scripts that must survive
     `mode: restart`.
 - **`sensor.labeled_feature_areas_state`** — state is the count of areas
-  labeled `feature_leader`. The `label_map` attribute is the flat
+  carrying the leader label. The `label_map` attribute is the flat
   `<scope_id>||<label>` registry of `(Area |Floor |)Provides:` declarations
   that the Areas automation diffs.
 
-Leaders are discovered from the `feature_leader` label
-(`(Area |Floor |)Leader: <Feature>` labels plus optional
-`… Enable/Disable/Invert/Increasing/Decreasing` modifier labels), unioned
-with leader definitions added in the UI as config subentries (those don't
-need any labels).
+Leaders, features, and followers stay 100% label-driven. Only
+**instance-level** knobs live in the config flow.
 
-Write paths:
+Write paths (both supported side-by-side):
 
-- Compat events `labeled_feature_set` and `labeled_feature_snapshot_set`
-  keep working exactly as before.
-- New validated actions `label_based_features.set_feature` and
-  `label_based_features.set_snapshot` (these write only to the
-  integration's sensors, never to legacy template sensors).
+- Legacy events `labeled_feature_set` and `labeled_feature_snapshot_set`
+  keep working exactly as before (existing `script.labeled_feature_generics`
+  calls need no changes).
+- New validated services `labeled_features.set_feature` and
+  `labeled_features.set_snapshot` publish the same events internally, so
+  the write path is single-source.
 
 All attributes (`leaders`, `features`, `snapshots`, `label_map`) are
-restored across restarts; `label_map` is additionally reconciled against
-the live registries once Home Assistant has started.
+restored across restarts; the areas sensor additionally re-reconciles
+against the live registries on `homeassistant.start`.
 
 ## Installation
 
@@ -66,38 +70,50 @@ the live registries once Home Assistant has started.
 
 ### Manual
 
-1. Copy `custom_components/label_based_features` into your
+1. Copy `custom_components/labeled_features` into your
    `custom_components/` directory
 2. Restart Home Assistant
 
 ## Configuration
 
-1. Settings → Devices & Services → Add Integration → "Label Based Features"
-2. Fields:
-   - **Entity ID suffix** — appended to both sensor entity IDs. Leave empty
-     for production. Use `_dev` to run a validation instance side-by-side
-     with existing template sensors.
+1. Remove the existing `sensor.labeled_features_state` and
+   `sensor.labeled_feature_areas_state` template blocks from
+   `configuration.yaml` (or use the `_dev`-suffix validation path — see below).
+2. Settings → Devices & Services → Add Integration → "Label Based Features"
+3. Fields:
+   - **Instance name** — display only (default `Labeled Features`).
+     Renaming it does not affect entity IDs.
+   - **Features sensor entity_id** — fully overridable
+     (default `sensor.labeled_features_state`).
+   - **Areas sensor entity_id** — fully overridable
+     (default `sensor.labeled_feature_areas_state`).
+   - **Leader label** — the label name that identifies leader entities
+     and areas (default `feature_leader`, case-sensitive).
    - **Error mode** — `silent | log | alert | stop` (default `log`).
-     `alert` calls the configured alert action with
-     `alert_severity`/`alert_title`/`alert_message`; `stop` logs at error
-     level and raises a Repair issue. Errors are always isolated to the
-     failing unit of work (one leader / one label) — a bad label never
-     aborts a whole sensor update.
+     `alert` calls the configured alert action; `stop` logs at error level
+     and raises a Repair issue. Errors are always isolated to the failing
+     unit of work (one leader / one label) — a bad label never aborts a
+     whole sensor update.
    - **Alert action** — action called by the alert tier (default
      `script.send_alert`).
-3. Optional: add **Leader definitions** as subentries (integration card →
-   Add leader). A subentry is equivalent to an
-   `(Area |Floor |)Leader: <Feature>` label plus its modifier labels; if
-   both configure the same leader and feature triple, the subentry wins.
+   - **Default script call mode** — `Blocking | NonBlocking` (default
+     `Blocking`). Per-feature overrides continue to be read from labels
+     on the features sensor entity.
 
-Options (error mode, alert action) can be changed later via *Configure*;
-the suffix via *Reconfigure*.
+Options (leader label, error mode, alert action, script call mode) can be
+changed later via *Configure*. Entity IDs and instance name change via
+*Reconfigure*.
+
+Multiple instances are supported. The typical setup is one production
+instance (default entity IDs) and one validation instance with `_dev`
+suffixes on both entity IDs — they run side-by-side against the same
+labels.
 
 ## Labels
 
 All matching is **case-sensitive** (`True`, feature names, keywords).
 
-On leader entities (must carry the `feature_leader` label):
+On leader entities (must carry the configured leader label):
 
 | Label | Meaning |
 |---|---|
@@ -121,54 +137,122 @@ On the **features sensor entity itself**:
 
 | Label | Meaning |
 |---|---|
-| `<pfx><F> Mode: Leader\|Any\|All` | Fold mode across a triple's leaders (default Leader) |
+| `<pfx><F> Mode: Leader\|Any\|All` | Fold mode across a triple's leaders (default `Leader`) |
 
-On areas (must carry the `feature_leader` label):
+On areas (must carry the leader label):
 
 | Label | Meaning |
 |---|---|
 | `Provides: <Label>` / `Area Provides: <Label>` / `Floor Provides: <Label>` | Register `(scope_id, label)` in `label_map` |
 | `<pfx>Provides <Label> Component: <comp>` | Component hint (default `select`) |
 
+## Services
+
+### `labeled_features.set_feature`
+
+Manually write into `sensor.labeled_features_state.features`.
+
+```yaml
+action: labeled_features.set_feature
+data:
+  target_feature: Night
+  scope: global
+  scope_id: ''
+  enabled: true
+```
+
+Internally fires the compat `labeled_feature_set` event with an added
+`timestamp`. Both entry points converge on the same sensor write path.
+
+### `labeled_features.set_snapshot`
+
+Write (or delete, via empty payload) into
+`sensor.labeled_features_state.snapshots`.
+
+```yaml
+action: labeled_features.set_snapshot
+data:
+  snapshot_name: sleep_timeout
+  payload:
+    media_player.bedroom_main_audio: 0.45
+```
+
+Empty payload deletes:
+
+```yaml
+action: labeled_features.set_snapshot
+data:
+  snapshot_name: sleep_timeout
+  payload: {}
+```
+
 ## Validating with a `_dev` instance
 
-Add an instance with suffix `_dev` while the template sensors are still
-running, then compare attributes across leader flips, button presses,
+Add an instance with `sensor.labeled_features_state_dev` /
+`sensor.labeled_feature_areas_state_dev` while the template sensors are
+still running, then compare attributes across leader flips, button presses,
 Direction/Invert labels, Any/All modes, manual Set Feature, snapshot
 round-trips, restarts, and label removals.
 
-**Important:** `Mode:` (and Script Call Mode) labels live on the sensor
-entity itself. A suffixed `_dev` sensor entity does **not** inherit the
-labels of the production sensor — copy them onto
-`sensor.labeled_features_state_dev` manually or Any/All folding will
-silently fall back to Leader mode during validation.
+**Important:** `Mode:` labels live on the sensor entity itself. A `_dev`
+sensor entity does **not** inherit labels from the production sensor —
+copy them onto `sensor.labeled_features_state_dev` manually or Any/All
+folding will silently fall back to Leader mode during validation.
+
+## Error handling
+
+Every unit of work (per leader, per label parse, per event handler)
+is wrapped in a try/except that routes through the configured tier:
+
+- `silent` — no-op
+- `log` — `_LOGGER.warning`
+- `alert` — fire-and-forget call to the configured alert action with
+  `alert_severity`/`alert_title`/`alert_message`
+- `stop` — `_LOGGER.error` plus an HA Repair Issue keyed by the
+  `(source, message)` pair. The issue clears automatically the next time
+  the sensor successfully processes the same operation.
+
+A failing label or a bad event payload never aborts the whole sensor
+update. The `stop` tier does not literally stop the sensor from
+processing further events (a sensor has nothing meaningful to halt) —
+it exists to surface a fixable Repair notification.
 
 ## Troubleshooting
 
-- **A feature stopped updating** — check the leader still carries the
-  `feature_leader` label and a `Leader:` label for that feature. Entries
-  whose leader disappeared are dropped on the next leader tick, not
-  immediately.
+- **A feature stopped updating** — verify the leader still carries the
+  configured leader label (default `feature_leader`) and a `Leader:` label
+  for that feature. Entries whose leader disappeared are dropped on the
+  next leader tick, not immediately.
 - **Button repeat-presses don't dispatch** — expected on the *first* press
   after boot (boot-noise gate rejects transitions from
-  unknown/unavailable); subsequent presses bump `last_changed_timestamp`
-  even when `enabled` doesn't flip.
+  `unknown`/`unavailable`); subsequent presses bump
+  `last_changed_timestamp` even when `enabled` doesn't flip.
 - **Floor feature missing** — floor-scoped labels on areas/entities
-  without a floor are skipped and reported through the configured error
+  without a floor are skipped and surfaced through the configured error
   mode; with `stop` they appear in Settings → System → Repairs.
-- **Two areas on one floor declare the same `Floor Provides:` label** —
-  only the first declaring area's entry survives (by design).
-- **Error visibility** — set error mode to `log` (default) and watch the
-  Core log, or `stop` for Repair issues that clear automatically when the
-  condition resolves.
+- **Entity ID collision at setup** — another integration or a leftover
+  YAML template sensor already owns the target entity ID. Remove the
+  template block from `configuration.yaml`, or choose a different entity
+  ID (e.g. add a `_dev` suffix).
 
 ## Recovery
 
-- Restart-safe: `leaders`/`features`/`snapshots`/`label_map` restore from
-  the entity's stored extra data; corrupt or legacy payloads coerce to
-  empty and rebuild on the next tick.
+- Restart-safe: `leaders` / `features` / `snapshots` / `label_map` restore
+  from the entity's stored extra data; corrupt or legacy payloads coerce
+  to empty and rebuild on the next tick.
 - To rebuild from scratch: remove the instance, restart, re-add it. The
   first leader tick reseeds `leaders`; `label_map` rebuilds immediately.
+
+## Tests
+
+Pure-logic tests (parser, evaluator, error handler) run standalone:
+
+```bash
+python3 -m pytest tests/test_label_parser.py tests/test_evaluator.py tests/test_error_handler.py
+```
+
+HA-dependent tests (`tests/test_sensors_ha.py`) require
+`pytest-homeassistant-custom-component` and are auto-skipped otherwise.
 
 ## License
 

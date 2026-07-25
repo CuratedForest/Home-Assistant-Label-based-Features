@@ -2,12 +2,13 @@
   "domain": "labeled_features",
   "name": "Labeled Features",
   "version": "0.1.0",
-  "documentation": "https://github.com/tonylofgren/Home-Assistant-Label-based-Features",
-  "issue_tracker": "https://github.com/tonylofgren/Home-Assistant-Label-based-Features/issues",
-  "codeowners": ["@tonylofgren"],
+  "documentation": "https://github.com/CuratedForest/Home-Assistant-Label-based-Features",
+  "issue_tracker": "https://github.com/CuratedForest/Home-Assistant-Label-based-Features/issues",
+  "codeowners": ["@CuratedForest"],
   "config_flow": true,
-  "iot_class": "local_polling",
+  "iot_class": "calculated",
+  "integration_type": "service",
   "requirements": [],
-  "homeassistant": "2025.1.0",
+  "dependencies": [],
   "generated_with": "aurora@aurora-smart-home (ha-integration-dev skill) | https://github.com/tonylofgren/aurora-smart-home"
 }

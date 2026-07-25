@@ -2,37 +2,109 @@
   "config": {
     "step": {
       "user": {
-        "title": "Labeled Features",
-        "description": "Labeled Features is a label-driven feature management system. No additional configuration is required."
-      },
-      "init": {
-        "title": "Labeled Features",
+        "title": "Label Based Features",
+        "description": "Configure a Labeled Features instance. Leaders, features, and followers stay label-driven; only instance-level settings live here.",
         "data": {
-          "enabled": "Enable Labeled Features"
+          "instance_name": "Instance name",
+          "features_entity_id": "Features sensor entity_id",
+          "areas_entity_id": "Areas sensor entity_id",
+          "leader_label": "Leader label (case-sensitive)",
+          "error_mode": "Error mode",
+          "alert_action": "Alert action (domain.name)",
+          "script_call_mode": "Default script call mode"
+        },
+        "data_description": {
+          "instance_name": "Display-only. Rename freely without affecting entity IDs.",
+          "features_entity_id": "Fully overridable. Defaults to sensor.labeled_features_state (matches the legacy template sensor).",
+          "areas_entity_id": "Fully overridable. Defaults to sensor.labeled_feature_areas_state.",
+          "leader_label": "The label name that identifies leader entities and areas. Defaults to feature_leader.",
+          "alert_action": "Called by the alert error tier with alert_severity/alert_title/alert_message. Default script.send_alert.",
+          "script_call_mode": "Instance default for script dispatch. Per-feature overrides continue to be read from labels on the Features sensor."
+        }
+      },
+      "reconfigure": {
+        "title": "Label Based Features",
+        "description": "Update the instance name, sensor entity IDs, or instance-level settings. Changing entity IDs reloads the platform.",
+        "data": {
+          "instance_name": "Instance name",
+          "features_entity_id": "Features sensor entity_id",
+          "areas_entity_id": "Areas sensor entity_id",
+          "leader_label": "Leader label",
+          "error_mode": "Error mode",
+          "alert_action": "Alert action",
+          "script_call_mode": "Default script call mode"
         }
       }
+    },
+    "error": {
+      "entity_id_invalid": "Entity ID must match sensor.<slug> (lowercase, digits, single underscores; no leading, trailing, or double underscores).",
+      "entity_id_taken": "Another integration or template sensor is already using this entity ID. Remove that first, or choose a different ID (e.g. add a _dev suffix).",
+      "entity_id_duplicate": "The two sensor entity IDs must be different from each other.",
+      "alert_action_invalid": "Alert action must be in the form domain.name (e.g. script.send_alert).",
+      "leader_label_required": "The leader label name is required."
+    },
+    "abort": {
+      "already_configured": "This combination of leader label and features sensor is already configured.",
+      "reconfigure_successful": "Configuration updated."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Label Based Features options",
+        "data": {
+          "leader_label": "Leader label",
+          "error_mode": "Error mode",
+          "alert_action": "Alert action",
+          "script_call_mode": "Default script call mode"
+        }
+      }
+    },
+    "error": {
+      "alert_action_invalid": "Alert action must be in the form domain.name.",
+      "leader_label_required": "The leader label name is required."
+    }
+  },
+  "issues": {
+    "component_error": {
+      "title": "Labeled Features error: {source}",
+      "description": "{message}"
     }
   },
   "services": {
-    "handle_error": {
-      "name": "Handle Error",
-      "description": "Route an error through the labeled features error handling framework.",
+    "set_feature": {
+      "name": "Set Feature",
+      "description": "Manually write into sensor.labeled_features_state.features.",
       "fields": {
-        "error_mode": {
-          "name": "Error Mode",
-          "description": "Error handling tier: silent, log, alert, or stop."
+        "target_feature": {
+          "name": "Feature",
+          "description": "The canonical feature name (case-sensitive)."
         },
-        "message": {
-          "name": "Message",
-          "description": "Human-readable error message."
+        "scope": {
+          "name": "Scope",
+          "description": "One of area, floor, global."
         },
-        "source": {
-          "name": "Source",
-          "description": "Short label for the error source."
+        "scope_id": {
+          "name": "Scope ID",
+          "description": "The area_id, floor_id, or empty string for global."
         },
-        "severity": {
-          "name": "Severity",
-          "description": "Severity level for the alert tier."
+        "enabled": {
+          "name": "Enabled",
+          "description": "The boolean value to record."
+        }
+      }
+    },
+    "set_snapshot": {
+      "name": "Set Snapshot",
+      "description": "Write a snapshot payload into sensor.labeled_features_state.snapshots (empty payload deletes).",
+      "fields": {
+        "snapshot_name": {
+          "name": "Snapshot name",
+          "description": "Short identifier."
+        },
+        "payload": {
+          "name": "Payload",
+          "description": "Mapping payload. Pass an empty mapping to delete."
         }
       }
     }
