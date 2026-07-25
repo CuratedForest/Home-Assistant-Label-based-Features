@@ -3,20 +3,199 @@
     "step": {
       "user": {
         "title": "Labeled Features",
-        "description": "Labeled Features is a label-driven feature management system. No additional configuration is required."
-      },
-      "init": {
-        "title": "Labeled Features",
+        "description": "Replaces the legacy Labeled Feature template sensors with native, byte-compatible sensors. Leave the suffix empty for production; use a suffix (e.g. _dev) to run a validation instance side-by-side with the template sensors.",
         "data": {
-          "enabled": "Enable Labeled Features"
+          "entity_id_suffix": "Entity ID suffix"
+        },
+        "data_description": {
+          "entity_id_suffix": "Appended to both sensor entity IDs. Must be empty or start with '_' (e.g. _dev)."
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Labeled Features",
+        "description": "Change the entity ID suffix. Note: Mode labels live on the sensor entity itself — re-apply any `Mode:` labels to the new sensor entity after a suffix change (or use Mode subentries).",
+        "data": {
+          "entity_id_suffix": "Entity ID suffix"
+        },
+        "data_description": {
+          "entity_id_suffix": "Appended to both sensor entity IDs. Must be empty or start with '_' (e.g. _dev)."
+        }
+      }
+    },
+    "error": {
+      "invalid_suffix": "Invalid suffix. Use an empty value or an underscore-prefixed slug such as _dev (lowercase letters, digits, underscores)."
+    },
+    "abort": {
+      "already_configured": "An instance with this entity ID suffix is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Labeled Features options",
+        "data": {
+          "error_mode": "Error mode",
+          "alert_action": "Alert action",
+          "alert_severity": "Alert severity"
+        },
+        "data_description": {
+          "error_mode": "How internal errors are handled: silent (ignore), log (Core log), alert (call the alert action), stop (log + Repair issue).",
+          "alert_action": "Action called by the alert tier with alert_severity / alert_title / alert_message fields.",
+          "alert_severity": "Severity passed to the alert action."
         }
       }
     }
   },
+  "config_subentries": {
+    "leader": {
+      "initiate_flow": {
+        "user": "Add leader"
+      },
+      "step": {
+        "user": {
+          "title": "Add leader definition",
+          "description": "Define a feature leader without labels. Equivalent to `Feature Leader` + `(Area |Floor |)Leader: <Feature>` plus modifier labels. Wins over label definitions for the same entity/feature/scope.",
+          "data": {
+            "entity_id": "Leader entity",
+            "feature": "Feature name",
+            "scope": "Scope",
+            "enable_value": "Enable value (optional)",
+            "disable_value": "Disable value (optional)",
+            "direction": "Direction (optional)",
+            "invert": "Invert"
+          },
+          "data_description": {
+            "feature": "Case-sensitive feature name (e.g. Night).",
+            "scope": "area / floor / global — equivalent to the Area / Floor / bare label prefix.",
+            "enable_value": "Enabled while state equals this value.",
+            "disable_value": "Disabled while state equals this value.",
+            "direction": "Numeric direction evaluation. Takes precedence over enable/disable values.",
+            "invert": "Invert the evaluated result (applies last)."
+          }
+        },
+        "reconfigure": {
+          "title": "Edit leader definition",
+          "data": {
+            "entity_id": "Leader entity",
+            "feature": "Feature name",
+            "scope": "Scope",
+            "enable_value": "Enable value (optional)",
+            "disable_value": "Disable value (optional)",
+            "direction": "Direction (optional)",
+            "invert": "Invert"
+          }
+        }
+      },
+      "abort": {
+        "already_configured": "This leader definition already exists."
+      }
+    },
+    "provides": {
+      "initiate_flow": {
+        "user": "Add Provides declaration"
+      },
+      "step": {
+        "user": {
+          "title": "Add Provides declaration",
+          "description": "Declare an area-level Provides feature without labels. Equivalent to an `(Area |Floor |)Provides: <Feature>` label on the area (plus optional Component modifier). Wins over the label declaration for the same scope/label.",
+          "data": {
+            "area_id": "Declaring area",
+            "feature": "Feature (label) name",
+            "scope": "Scope",
+            "component": "Component hint"
+          },
+          "data_description": {
+            "feature": "Case-sensitive feature name (e.g. Audio Mode).",
+            "scope": "area / floor / none — equivalent to the Area / Floor / bare label prefix.",
+            "component": "Component hint recorded in label_map (default select)."
+          }
+        },
+        "reconfigure": {
+          "title": "Edit Provides declaration",
+          "data": {
+            "area_id": "Declaring area",
+            "feature": "Feature (label) name",
+            "scope": "Scope",
+            "component": "Component hint"
+          }
+        }
+      },
+      "abort": {
+        "already_configured": "This Provides declaration already exists."
+      }
+    },
+    "mode": {
+      "initiate_flow": {
+        "user": "Add feature mode"
+      },
+      "step": {
+        "user": {
+          "title": "Add feature mode",
+          "description": "Set the fold mode for a (feature, scope) pair without labels. Equivalent to a `<Scoped Feature> Mode: Leader|Any|All` label on the sensor entity. Wins over the label.",
+          "data": {
+            "feature": "Feature name",
+            "scope": "Scope",
+            "mode": "Mode"
+          },
+          "data_description": {
+            "feature": "Case-sensitive feature name (e.g. Night).",
+            "mode": "leader = only the triggering leader counts; any = OR over all mapped leaders; all = AND over all mapped leaders."
+          }
+        },
+        "reconfigure": {
+          "title": "Edit feature mode",
+          "data": {
+            "feature": "Feature name",
+            "scope": "Scope",
+            "mode": "Mode"
+          }
+        }
+      },
+      "abort": {
+        "already_configured": "This feature mode already exists."
+      }
+    }
+  },
   "services": {
+    "set_feature": {
+      "name": "Set Feature",
+      "description": "Write a manual override into the features attribute of the default instance's state sensor.",
+      "fields": {
+        "target_feature": {
+          "name": "Target Feature",
+          "description": "The feature name whose state to write (e.g. Night)."
+        },
+        "scope": {
+          "name": "Scope",
+          "description": "The scope the override applies to."
+        },
+        "scope_id": {
+          "name": "Scope ID",
+          "description": "The area_id or floor_id; empty for global scope."
+        },
+        "enabled": {
+          "name": "Enabled",
+          "description": "The value to record."
+        }
+      }
+    },
+    "set_snapshot": {
+      "name": "Set Snapshot",
+      "description": "Write (or clear) an entry under the snapshots attribute of the default instance's state sensor.",
+      "fields": {
+        "snapshot_name": {
+          "name": "Snapshot Name",
+          "description": "The key under snapshots (e.g. sleep_timeout)."
+        },
+        "payload": {
+          "name": "Payload",
+          "description": "The mapping payload to store. Empty mapping clears the entry."
+        }
+      }
+    },
     "handle_error": {
       "name": "Handle Error",
-      "description": "Route an error through the labeled features error handling framework.",
+      "description": "Route an error through the Labeled Features error tiers (field-compatible with script.labeled_feature_error_mode).",
       "fields": {
         "error_mode": {
           "name": "Error Mode",
@@ -32,9 +211,44 @@
         },
         "severity": {
           "name": "Severity",
-          "description": "Severity level for the alert tier."
+          "description": "Severity for the alert tier."
         }
       }
+    }
+  },
+  "issues": {
+    "leader_no_area": {
+      "title": "Leader without an area",
+      "description": "{source}: {message} Assign the entity (or its device) to an area, or change the leader's scope. This issue clears itself once resolved."
+    },
+    "leader_no_floor": {
+      "title": "Leader without a floor",
+      "description": "{source}: {message} Assign the entity's area to a floor, or change the leader's scope. This issue clears itself once resolved."
+    },
+    "provides_no_floor": {
+      "title": "Provides declaration without a floor",
+      "description": "{source}: {message} Assign the area to a floor, or change the declaration's scope. This issue clears itself once resolved."
+    },
+    "invalid_subentry": {
+      "title": "Invalid Labeled Features subentry",
+      "description": "{source}: {message} Edit or remove the offending subentry from the integration card."
+    },
+    "alert_action_failed": {
+      "title": "Labeled Features alert action failed",
+      "description": "{source}: {message} Check the configured alert action under the integration's options."
+    },
+    "generic_error": {
+      "title": "Labeled Features error",
+      "description": "{source}: {message}"
+    },
+    "no_default_instance": {
+      "title": "No default Labeled Features instance",
+      "description": "This action writes to the default (suffix-less) instance, which is not currently loaded."
+    }
+  },
+  "exceptions": {
+    "no_default_instance": {
+      "message": "No default (suffix-less) Labeled Features instance is loaded. This action writes only to the default instance."
     }
   }
 }

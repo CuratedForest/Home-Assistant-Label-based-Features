@@ -10,20 +10,22 @@ A Home Assistant custom integration implementing the state layer of the
 system: drive automations from entity labels and area/floor metadata via a
 leader/follower pattern, with no per-device automation sprawl.
 
-This integration replaces the two production trigger-based template sensors
+**Phase 1** replaces the two production trigger-based template sensors
 (`sensor.labeled_features_state` and `sensor.labeled_feature_areas_state`)
 with byte-compatible native sensors, adds tiered error handling, and keeps
 every downstream consumer (the Leaders/Areas automations and the
-`labeled_feature_*` scripts) working unchanged.
+`labeled_feature_*` scripts) working unchanged. Later phases convert the
+automations and scripts themselves.
 
 ## What this does
 
-Two sensors per instance (default entity IDs, optional per-instance suffix):
+Two sensors per instance (default entity IDs shown; an optional per-instance
+suffix is appended to both):
 
 - **`sensor.labeled_features_state`** — state is the count of leader
   entities. Attributes:
-  - `feature_meta` — static catalog of the generic features (Media */
-    Volume */Lights */Fan *).
+  - `feature_meta` — static catalog of the generic features (Media */,
+    Volume */, Lights */, Fan *).
   - `leaders` — per-leader `{current_value, previous_value,
     last_changed_timestamp}`. Skip-values (`*_initial_press`,
     unknown/unavailable/none) carry the previous entry through.
@@ -32,28 +34,33 @@ Two sensors per instance (default entity IDs, optional per-instance suffix):
     as the scope_id key.
   - `snapshots` — persisted mapping surface for scripts that must survive
     `mode: restart`.
-- **`sensor.labeled_feature_areas_state`** — state is the count of areas
-  labeled `feature_leader`. The `label_map` attribute is the flat
-  `<scope_id>||<label>` registry of `(Area |Floor |)Provides:` declarations
-  that the Areas automation diffs.
+- **`sensor.labeled_feature_areas_state`** — state is the count of gated
+  areas. The `label_map` attribute is the flat `<scope_id>||<label>`
+  registry of `(Area |Floor |)Provides:` declarations that the Areas
+  automation diffs.
 
 Leaders are discovered from the `feature_leader` label
 (`(Area |Floor |)Leader: <Feature>` labels plus optional
-`… Enable/Disable/Invert/Increasing/Decreasing` modifier labels), unioned
-with leader definitions added in the UI as config subentries (those don't
-need any labels).
+`… Enable/Disable/Invert/Increasing/Decreasing` modifier labels), **unioned
+with leader definitions added in the UI as config subentries** (those don't
+need any labels). Area `Provides:` declarations and per-feature `Mode:`
+settings likewise work as labels *or* subentries; a subentry wins over the
+label definition for the same key.
 
 Write paths:
 
 - Compat events `labeled_feature_set` and `labeled_feature_snapshot_set`
-  keep working exactly as before.
-- New validated actions `label_based_features.set_feature` and
-  `label_based_features.set_snapshot` (these write only to the
-  integration's sensors, never to legacy template sensors).
+  keep working exactly as before (every loaded instance consumes them, so a
+  `_dev` instance behaves faithfully during side-by-side validation).
+- Native validated actions `labeled_features.set_feature` and
+  `labeled_features.set_snapshot` write only to the default (suffix-less)
+  instance.
+- `labeled_features.handle_error` routes an error through the error tiers
+  (field-compatible with the legacy `script.labeled_feature_error_mode`).
 
 All attributes (`leaders`, `features`, `snapshots`, `label_map`) are
-restored across restarts; `label_map` is additionally reconciled against
-the live registries once Home Assistant has started.
+restored across restarts; `label_map` is additionally rebuilt from the live
+registries on start.
 
 ## Installation
 
@@ -66,38 +73,41 @@ the live registries once Home Assistant has started.
 
 ### Manual
 
-1. Copy `custom_components/label_based_features` into your
+1. Copy `custom_components/labeled_features` into your
    `custom_components/` directory
 2. Restart Home Assistant
 
 ## Configuration
 
-1. Settings → Devices & Services → Add Integration → "Label Based Features"
-2. Fields:
-   - **Entity ID suffix** — appended to both sensor entity IDs. Leave empty
-     for production. Use `_dev` to run a validation instance side-by-side
-     with existing template sensors.
+1. Settings → Devices & Services → Add Integration → "Labeled Features"
+2. **Entity ID suffix** — appended to both sensor entity IDs. Leave empty
+   for production. Use `_dev` to run a validation instance side-by-side
+   with the legacy template sensors. Changeable later via *Reconfigure*.
+3. *Configure* (options):
    - **Error mode** — `silent | log | alert | stop` (default `log`).
      `alert` calls the configured alert action with
      `alert_severity`/`alert_title`/`alert_message`; `stop` logs at error
-     level and raises a Repair issue. Errors are always isolated to the
-     failing unit of work (one leader / one label) — a bad label never
-     aborts a whole sensor update.
+     level and raises a self-clearing Repair issue. Errors are always
+     isolated to the failing unit of work (one leader / one label) — a bad
+     label never aborts a whole sensor update.
    - **Alert action** — action called by the alert tier (default
      `script.send_alert`).
-3. Optional: add **Leader definitions** as subentries (integration card →
-   Add leader). A subentry is equivalent to an
-   `(Area |Floor |)Leader: <Feature>` label plus its modifier labels; if
-   both configure the same leader and feature triple, the subentry wins.
-
-Options (error mode, alert action) can be changed later via *Configure*;
-the suffix via *Reconfigure*.
+   - **Alert severity** — `low | medium | high` (default `medium`).
+4. Optional subentries (integration card):
+   - **Leader** — entity + feature + scope (+ optional Enable/Disable
+     values, Direction, Invert). Equivalent to `Feature Leader` +
+     `(Area |Floor |)Leader: <F>` plus modifier labels.
+   - **Provides declaration** — area + feature name + scope + component
+     hint. Equivalent to `(Area |Floor |)Provides: <F>` on the area.
+   - **Mode** — feature + scope + `leader | any | all`. Equivalent to a
+     `<Scoped F> Mode:` label on the sensor entity.
 
 ## Labels
 
 All matching is **case-sensitive** (`True`, feature names, keywords).
 
-On leader entities (must carry the `feature_leader` label):
+On leader entities (must carry the `feature_leader` label, unless defined
+via a subentry):
 
 | Label | Meaning |
 |---|---|
@@ -123,50 +133,62 @@ On the **features sensor entity itself**:
 |---|---|
 | `<pfx><F> Mode: Leader\|Any\|All` | Fold mode across a triple's leaders (default Leader) |
 
-On areas (must carry the `feature_leader` label):
+On areas (must carry the `feature_leader` label, unless declared via a
+Provides subentry):
 
 | Label | Meaning |
 |---|---|
 | `Provides: <Label>` / `Area Provides: <Label>` / `Floor Provides: <Label>` | Register `(scope_id, label)` in `label_map` |
 | `<pfx>Provides <Label> Component: <comp>` | Component hint (default `select`) |
 
-## Validating with a `_dev` instance
+## Migrating from the template sensors
 
-Add an instance with suffix `_dev` while the template sensors are still
-running, then compare attributes across leader flips, button presses,
-Direction/Invert labels, Any/All modes, manual Set Feature, snapshot
-round-trips, restarts, and label removals.
+1. Add an instance with suffix `_dev` while the template sensors are still
+   running, and compare attributes across leader flips, button presses,
+   Direction/Invert labels, Any/All modes, manual Set Feature, snapshot
+   round-trips, restarts, and label removals. Note that `Mode:` labels live
+   on the sensor entity itself — copy them onto
+   `sensor.labeled_features_state_dev` (or use Mode subentries) or Any/All
+   folding falls back to Leader mode on the dev instance.
+2. Cutover: remove both `template:` sensor blocks from
+   `configuration.yaml`, restart, and delete the orphaned template entity
+   registry entries.
+3. Add the default instance (no suffix) — the new entities claim
+   `sensor.labeled_features_state` and `sensor.labeled_feature_areas_state`.
+4. Re-apply any `Mode:` / `Script Call Mode:` labels onto the new sensor
+   entities (labels do not transfer from template registry entries).
+5. Remove the `_dev` instance when satisfied.
 
-**Important:** `Mode:` (and Script Call Mode) labels live on the sensor
-entity itself. A suffixed `_dev` sensor entity does **not** inherit the
-labels of the production sensor — copy them onto
-`sensor.labeled_features_state_dev` manually or Any/All folding will
-silently fall back to Leader mode during validation.
+Note: `leaders`/`features`/`snapshots` do not migrate — the first leader
+ticks rebuild `leaders`, snapshots rebuild on the next script write, and
+manual overrides must be re-applied if still desired.
 
 ## Troubleshooting
 
 - **A feature stopped updating** — check the leader still carries the
-  `feature_leader` label and a `Leader:` label for that feature. Entries
-  whose leader disappeared are dropped on the next leader tick, not
-  immediately.
+  `feature_leader` label (or has a leader subentry) and a `Leader:` label
+  for that feature. Entries whose leader disappeared are dropped on the
+  next leader tick, not immediately.
 - **Button repeat-presses don't dispatch** — expected on the *first* press
-  after boot (boot-noise gate rejects transitions from
+  after boot (the boot-noise gate rejects transitions from
   unknown/unavailable); subsequent presses bump `last_changed_timestamp`
   even when `enabled` doesn't flip.
-- **Floor feature missing** — floor-scoped labels on areas/entities
+- **Floor feature missing** — floor-scoped leaders/declarations on areas
   without a floor are skipped and reported through the configured error
-  mode; with `stop` they appear in Settings → System → Repairs.
+  mode; with `stop` they appear in Settings → System → Repairs and clear
+  automatically once resolved.
 - **Two areas on one floor declare the same `Floor Provides:` label** —
   only the first declaring area's entry survives (by design).
-- **Error visibility** — set error mode to `log` (default) and watch the
-  Core log, or `stop` for Repair issues that clear automatically when the
-  condition resolves.
+- **An action says "no default instance"** — `labeled_features.set_feature`
+  and `set_snapshot` write only to the suffix-less instance. The compat
+  events (`labeled_feature_set` / `labeled_feature_snapshot_set`) are
+  consumed by every loaded instance.
 
 ## Recovery
 
 - Restart-safe: `leaders`/`features`/`snapshots`/`label_map` restore from
-  the entity's stored extra data; corrupt or legacy payloads coerce to
-  empty and rebuild on the next tick.
+  the entity's stored state; corrupt or legacy payloads coerce to empty
+  and rebuild on the next tick.
 - To rebuild from scratch: remove the instance, restart, re-add it. The
   first leader tick reseeds `leaders`; `label_map` rebuilds immediately.
 
