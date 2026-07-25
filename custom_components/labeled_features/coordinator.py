@@ -115,6 +115,7 @@ class LabeledFeaturesCoordinator(DataUpdateCoordinator[dict]):
 
     async def async_setup(self) -> None:
         """Set up event listeners and perform initial build."""
+        _LOGGER.info("Setting up coordinator with feature_leader_label='%s'", self.feature_leader_label)
         self._bus_listeners.append(
             self.hass.bus.async_listen(
                 "label_registry_updated", self._on_registry_changed
@@ -240,14 +241,8 @@ class LabeledFeaturesCoordinator(DataUpdateCoordinator[dict]):
 
     def _is_feature_leader(self, entity_id: str) -> bool:
         """Check if entity carries the feature_leader label."""
-        try:
-            reg = er.async_get(self.hass)
-            entry = reg.async_get(entity_id)
-            if entry and entry.labels:
-                return self.feature_leader_label in entry.labels
-        except Exception:
-            pass
-        return False
+        label_names = self._get_entity_label_names(entity_id)
+        return self.feature_leader_label in label_names
 
     def _get_entity_label_names(self, entity_id: str) -> list[str]:
         """Get label names for an entity."""
@@ -314,7 +309,8 @@ class LabeledFeaturesCoordinator(DataUpdateCoordinator[dict]):
         try:
             reg = er.async_get(self.hass)
             lr = label_helper.async_get(self.hass)
-        except Exception:
+        except Exception as err:
+            _LOGGER.debug("Failed to get registries for label %s: %s", label_name, err)
             return []
         result: list[str] = []
         for entry in reg.entities.values():
@@ -327,6 +323,7 @@ class LabeledFeaturesCoordinator(DataUpdateCoordinator[dict]):
                             break
                     except Exception:
                         continue
+        _LOGGER.debug("Label '%s' resolved to %d entities", label_name, len(result))
         return result
 
     def _resolve_label_areas(self, label_name: str) -> list[str]:
@@ -334,7 +331,8 @@ class LabeledFeaturesCoordinator(DataUpdateCoordinator[dict]):
         try:
             areg = ar.async_get(self.hass)
             lr = label_helper.async_get(self.hass)
-        except Exception:
+        except Exception as err:
+            _LOGGER.debug("Failed to get registries for area label %s: %s", label_name, err)
             return []
         result: list[str] = []
         for area in areg.async_list_areas():
@@ -347,6 +345,7 @@ class LabeledFeaturesCoordinator(DataUpdateCoordinator[dict]):
                             break
                     except Exception:
                         continue
+        _LOGGER.debug("Area label '%s' resolved to %d areas", label_name, len(result))
         return result
 
     # ------------------------------------------------------------------
@@ -355,20 +354,26 @@ class LabeledFeaturesCoordinator(DataUpdateCoordinator[dict]):
 
     def _build_all(self) -> None:
         """Rebuild all state from scratch."""
+        _LOGGER.info("Starting full rebuild with feature_leader_label='%s'", self.feature_leader_label)
         self._rebuild_leaders()
         self._rebuild_features(None)
         self._rebuild_label_map()
+        _LOGGER.info("Rebuild complete: %d leaders, %d features, %d label_map entries",
+                     len(self._leaders), len(self._features), len(self._label_map))
 
     def _rebuild_leaders(self) -> None:
         """Rebuild leader states from current registry."""
         leader_entities = self._resolve_label_entities(self.feature_leader_label)
+        _LOGGER.info("Found %d leader entities for label '%s'", len(leader_entities), self.feature_leader_label)
         new_leaders: dict[str, Any] = {}
         for eid in leader_entities:
             state_obj = self.hass.states.get(eid)
             if state_obj is None:
+                _LOGGER.debug("No state for leader entity %s", eid)
                 continue
             state_str = state_obj.state
             if state_str.lower() in STATE_UNAVAILABLE:
+                _LOGGER.debug("Leader entity %s has unavailable state: %s", eid, state_str)
                 continue
             ts = (
                 state_obj.last_changed.timestamp()
@@ -382,6 +387,7 @@ class LabeledFeaturesCoordinator(DataUpdateCoordinator[dict]):
                 "last_changed_timestamp": ts,
             }
         self._leaders = new_leaders
+        _LOGGER.info("Built leaders dict with %d entries", len(new_leaders))
 
     def _update_leader_state(self, entity_id: str, new_state: State | None) -> None:
         """Update a single leader's state."""
@@ -817,6 +823,7 @@ class LabeledFeaturesCoordinator(DataUpdateCoordinator[dict]):
     def _rebuild_label_map(self) -> None:
         """Rebuild the label_map for area-based features."""
         leader_areas = self._resolve_label_areas(self.feature_leader_label)
+        _LOGGER.info("Found %d leader areas for label '%s'", len(leader_areas), self.feature_leader_label)
 
         scopes: dict[str, dict] = {}
         for aid in leader_areas:
