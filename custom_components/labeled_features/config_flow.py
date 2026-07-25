@@ -18,8 +18,10 @@ from .const import (
     CONF_ALERT_ACTION,
     CONF_DEFAULT_ERROR_MODE,
     CONF_ENTITY_ID_SUFFIX,
+    CONF_FEATURE_LEADER_LABEL,
     DEFAULT_ALERT_ACTION,
     DEFAULT_ERROR_MODE,
+    DEFAULT_FEATURE_LEADER_LABEL,
     DOMAIN,
     ERROR_MODES,
 )
@@ -68,6 +70,10 @@ class LabeledFeaturesConfigFlow(
             data_schema=vol.Schema(
                 {
                     vol.Optional(
+                        CONF_FEATURE_LEADER_LABEL,
+                        default=DEFAULT_FEATURE_LEADER_LABEL,
+                    ): str,
+                    vol.Optional(
                         CONF_DEFAULT_ERROR_MODE,
                         default=DEFAULT_ERROR_MODE,
                     ): selector.SelectSelector(
@@ -110,6 +116,12 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
             step_id="init",
             data_schema=vol.Schema(
                 {
+                    vol.Optional(
+                        CONF_FEATURE_LEADER_LABEL,
+                        default=self._config_entry.data.get(
+                            CONF_FEATURE_LEADER_LABEL, DEFAULT_FEATURE_LEADER_LABEL
+                        ),
+                    ): str,
                     vol.Optional(
                         CONF_DEFAULT_ERROR_MODE,
                         default=self._config_entry.data.get(

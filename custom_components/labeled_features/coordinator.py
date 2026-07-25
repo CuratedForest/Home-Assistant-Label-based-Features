@@ -22,11 +22,11 @@ from .const import (
     BUTTON_DOMAINS,
     COMPONENT_DEFAULT,
     CONF_ENTITY_ID_SUFFIX,
+    DEFAULT_FEATURE_LEADER_LABEL,
     EVENT_LABELED_FEATURE_SET,
     EVENT_LABELED_FEATURE_SNAPSHOT_SET,
     FEATURE_META,
     FEATURE_MODES,
-    LABEL_FEATURE_LEADER,
     LABEL_MAP_SEPARATOR,
     MODE_ALL,
     MODE_ANY,
@@ -65,6 +65,14 @@ class LabeledFeaturesCoordinator(DataUpdateCoordinator[dict]):
         self._label_map: dict[str, Any] = {}
         self._snapshots: dict[str, Any] = {}
         self._leaders: dict[str, Any] = {}
+
+    @property
+    def feature_leader_label(self) -> str:
+        """Return the configured feature leader label name."""
+        from .const import CONF_FEATURE_LEADER_LABEL, DEFAULT_FEATURE_LEADER_LABEL
+        return self._entry.data.get(
+            CONF_FEATURE_LEADER_LABEL, DEFAULT_FEATURE_LEADER_LABEL
+        )
 
     def _build_coordinator_data(self) -> dict:
         """Build coordinator data dict for sensors."""
@@ -187,7 +195,7 @@ class LabeledFeaturesCoordinator(DataUpdateCoordinator[dict]):
             self._features = self._carry_through(
                 self._features,
                 self._build_triple_map(
-                    self._resolve_label_entities(LABEL_FEATURE_LEADER)
+                    self._resolve_label_entities(self.feature_leader_label)
                 ),
             )
             self.async_set_updated_data(self._build_coordinator_data())
@@ -236,7 +244,7 @@ class LabeledFeaturesCoordinator(DataUpdateCoordinator[dict]):
             reg = er.async_get(self.hass)
             entry = reg.async_get(entity_id)
             if entry and entry.labels:
-                return LABEL_FEATURE_LEADER in entry.labels
+                return self.feature_leader_label in entry.labels
         except Exception:
             pass
         return False
@@ -353,7 +361,7 @@ class LabeledFeaturesCoordinator(DataUpdateCoordinator[dict]):
 
     def _rebuild_leaders(self) -> None:
         """Rebuild leader states from current registry."""
-        leader_entities = self._resolve_label_entities(LABEL_FEATURE_LEADER)
+        leader_entities = self._resolve_label_entities(self.feature_leader_label)
         new_leaders: dict[str, Any] = {}
         for eid in leader_entities:
             state_obj = self.hass.states.get(eid)
@@ -465,7 +473,7 @@ class LabeledFeaturesCoordinator(DataUpdateCoordinator[dict]):
 
     def _rebuild_features(self, _event_data: dict | None) -> None:
         """Rebuild features state from scratch (full rebuild)."""
-        all_leaders = self._resolve_label_entities(LABEL_FEATURE_LEADER)
+        all_leaders = self._resolve_label_entities(self.feature_leader_label)
         triples = self._build_triple_map(all_leaders)
         modes = self._resolve_modes(all_leaders, triples)
         prev_features = self._features
@@ -558,7 +566,7 @@ class LabeledFeaturesCoordinator(DataUpdateCoordinator[dict]):
         if new_state is None:
             return
 
-        all_leaders = self._resolve_label_entities(LABEL_FEATURE_LEADER)
+        all_leaders = self._resolve_label_entities(self.feature_leader_label)
         if changed_eid not in all_leaders:
             return
 
@@ -808,7 +816,7 @@ class LabeledFeaturesCoordinator(DataUpdateCoordinator[dict]):
 
     def _rebuild_label_map(self) -> None:
         """Rebuild the label_map for area-based features."""
-        leader_areas = self._resolve_label_areas(LABEL_FEATURE_LEADER)
+        leader_areas = self._resolve_label_areas(self.feature_leader_label)
 
         scopes: dict[str, dict] = {}
         for aid in leader_areas:

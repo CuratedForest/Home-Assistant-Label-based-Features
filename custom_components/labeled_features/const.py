@@ -15,6 +15,7 @@ DOMAIN: Final = "labeled_features"
 CONF_DEFAULT_ERROR_MODE: Final = "default_error_mode"
 CONF_ALERT_ACTION: Final = "alert_action"
 CONF_ENTITY_ID_SUFFIX: Final = "entity_id_suffix"
+CONF_FEATURE_LEADER_LABEL: Final = "feature_leader_label"
 
 # Error mode tiers
 ERROR_MODE_SILENT: Final = "silent"
@@ -116,6 +117,7 @@ FEATURE_META: Final = {
 
 # Leader label
 LABEL_FEATURE_LEADER: Final = "Feature Leader"
+DEFAULT_FEATURE_LEADER_LABEL: Final = LABEL_FEATURE_LEADER
 
 # Label name patterns for modifier labels (should be filtered from feature list)
 MODIFIER_LABEL_KEYWORDS: Final = (
