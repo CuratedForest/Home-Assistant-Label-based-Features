@@ -19,7 +19,6 @@ from homeassistant.core import (
 )
 from homeassistant.helpers import area_registry as ar
 from homeassistant.helpers import entity_registry as er
-from homeassistant.helpers import floor_registry as fr
 from homeassistant.util import dt as dt_util
 
 from .const import (
@@ -50,7 +49,7 @@ PROVIDES_RE = re.compile(r"^(Area |Floor |)Provides: (.+)$")
 def _compute_floor_id(hass: HomeAssistant, area_id: str) -> str:
     """Compute the floor_id for a given area_id using the area registry."""
     area_reg = ar.async_get(hass)
-    area = area_reg.async_get(area_id)
+    area = area_reg.areas.get(area_id)
     if area is None:
         return ""
     return area.floor_id or ""
@@ -225,7 +224,7 @@ class LabeledFeaturesManager:
     def _get_entity_labels(self, entity_id: str) -> set[str]:
         """Get all labels for an entity using the entity registry."""
         entity_reg = er.async_get(self.hass)
-        entry = entity_reg.async_get(entity_id)
+        entry = entity_reg.entities.get(entity_id)
         if entry and entry.labels:
             return set(entry.labels)
         return set()
@@ -233,7 +232,7 @@ class LabeledFeaturesManager:
     def _get_area_labels(self, area_id: str) -> set[str]:
         """Get all labels for an area using the area registry."""
         area_reg = ar.async_get(self.hass)
-        area = area_reg.async_get(area_id)
+        area = area_reg.areas.get(area_id)
         if area and area.labels:
             return set(area.labels)
         return set()
@@ -241,24 +240,10 @@ class LabeledFeaturesManager:
     def _get_area_id(self, entity_id: str) -> str:
         """Get the area_id for an entity using the entity registry."""
         entity_reg = er.async_get(self.hass)
-        entry = entity_reg.async_get(entity_id)
+        entry = entity_reg.entities.get(entity_id)
         if entry and entry.area_id:
             return entry.area_id
         return ""
-
-    def _get_floor_ids(self) -> list[str]:
-        """Get all floor names using the floor registry."""
-        floor_reg = fr.async_get(self.hass)
-        return list(floor_reg.floors.keys())
-
-    def _get_areas_in_floor(self, floor_id: str) -> list[str]:
-        """Get all area_ids in a floor using the area registry."""
-        area_reg = ar.async_get(self.hass)
-        return [
-            area.id
-            for area in area_reg.areas.values()
-            if area.floor_id == floor_id
-        ]
 
     # ------------------------------------------------------------------
     # Event handlers
@@ -857,7 +842,7 @@ class LabeledFeaturesManager:
         modifier_re = re.compile(MODIFIER_LABEL_PATTERN)
 
         for aid in areas_with_leaders:
-            area = area_reg.async_get(aid)
+            area = area_reg.areas.get(aid)
             if area is None:
                 continue
 
