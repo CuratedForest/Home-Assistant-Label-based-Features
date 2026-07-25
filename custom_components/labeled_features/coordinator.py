@@ -66,7 +66,7 @@ class LabeledFeaturesCoordinator(DataUpdateCoordinator[dict]):
         self._snapshots: dict[str, Any] = {}
         self._leaders: dict[str, Any] = {}
 
-    def _build_data(self) -> dict:
+    def _build_coordinator_data(self) -> dict:
         """Build coordinator data dict for sensors."""
         return {
             "feature_meta": self.feature_meta,
@@ -75,11 +75,6 @@ class LabeledFeaturesCoordinator(DataUpdateCoordinator[dict]):
             "snapshots": self._snapshots,
             "label_map": self._label_map,
         }
-
-    @property
-    def data(self) -> dict:
-        """Return current data."""
-        return self._build_data()
 
     @property
     def feature_meta(self) -> dict:
@@ -154,7 +149,7 @@ class LabeledFeaturesCoordinator(DataUpdateCoordinator[dict]):
             )
         )
         self._build_all()
-        self.async_set_updated_data(self._build_data())
+        self.async_set_updated_data(self._build_coordinator_data())
 
     @callback
     def async_unload(self) -> None:
@@ -171,7 +166,7 @@ class LabeledFeaturesCoordinator(DataUpdateCoordinator[dict]):
     def _on_registry_changed(self, _event: Event) -> None:
         """Handle registry change events."""
         self._build_all()
-        self.async_set_updated_data(self._build_data())
+        self.async_set_updated_data(self._build_coordinator_data())
 
     @callback
     def _on_state_changed(self, event: Event) -> None:
@@ -195,7 +190,7 @@ class LabeledFeaturesCoordinator(DataUpdateCoordinator[dict]):
                     self._resolve_label_entities(LABEL_FEATURE_LEADER)
                 ),
             )
-            self.async_set_updated_data(self._build_data())
+            self.async_set_updated_data(self._build_coordinator_data())
             return
 
         # Gate: reject boot-restore noise (no old state or old state was
@@ -209,7 +204,7 @@ class LabeledFeaturesCoordinator(DataUpdateCoordinator[dict]):
         new_state = event.data.get("new_state")
         self._update_leader_state(eid, new_state)
         self._process_state_changed(eid, new_state)
-        self.async_set_updated_data(self._build_data())
+        self.async_set_updated_data(self._build_coordinator_data())
 
     @callback
     def _on_labeled_feature_set(self, event: Event) -> None:
@@ -217,19 +212,19 @@ class LabeledFeaturesCoordinator(DataUpdateCoordinator[dict]):
         self._features = self._handle_manual_override(
             self._features, event.data
         )
-        self.async_set_updated_data(self._build_data())
+        self.async_set_updated_data(self._build_coordinator_data())
 
     @callback
     def _on_labeled_feature_snapshot_set(self, event: Event) -> None:
         """Handle snapshot set events."""
         self._handle_snapshot_set(event.data)
-        self.async_set_updated_data(self._build_data())
+        self.async_set_updated_data(self._build_coordinator_data())
 
     @callback
     def _on_homeassistant_start(self, _event: Event) -> None:
         """Reconcile all state against live registries on boot."""
         self._build_all()
-        self.async_set_updated_data(self._build_data())
+        self.async_set_updated_data(self._build_coordinator_data())
 
     # ------------------------------------------------------------------
     # Label / registry helpers

@@ -61,16 +61,16 @@ class LabeledFeaturesStateSensor(SensorEntity):
     @property
     def native_value(self) -> int | None:
         """Return the state."""
-        return len(self._coordinator.data.get("leaders", {}))
+        return len(self._coordinator._leaders)
 
     @property
     def extra_state_attributes(self) -> dict | None:
         """Return extra attributes."""
         return {
-            "feature_meta": self._coordinator.data.get("feature_meta", {}),
-            "leaders": self._coordinator.data.get("leaders", {}),
-            "features": self._coordinator.data.get("features", {}),
-            "snapshots": self._coordinator.data.get("snapshots", {}),
+            "feature_meta": self._coordinator.feature_meta,
+            "leaders": self._coordinator._leaders,
+            "features": self._coordinator._features,
+            "snapshots": self._coordinator._snapshots,
         }
 
     @property
@@ -105,7 +105,7 @@ class LabeledFeatureAreasStateSensor(SensorEntity):
     def native_value(self) -> int | None:
         """Return the state."""
         area_ids: set[str] = set()
-        for entry_data in self._coordinator.data.get("label_map", {}).values():
+        for entry_data in self._coordinator._label_map.values():
             if isinstance(entry_data, dict):
                 sid = entry_data.get("scope_id")
                 if sid:
@@ -116,7 +116,7 @@ class LabeledFeatureAreasStateSensor(SensorEntity):
     def extra_state_attributes(self) -> dict | None:
         """Return extra attributes."""
         return {
-            "label_map": self._coordinator.data.get("label_map", {}),
+            "label_map": self._coordinator._label_map,
         }
 
     @property
