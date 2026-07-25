@@ -60,7 +60,7 @@ class LabeledFeaturesCoordinator(DataUpdateCoordinator[dict]):
             config_entry=entry,
         )
         self._entry = entry
-        self._listeners: list[Callable[[], None]] = []
+        self._bus_listeners: list[Callable[[], None]] = []
         self._features: dict[str, Any] = {}
         self._label_map: dict[str, Any] = {}
         self._snapshots: dict[str, Any] = {}
@@ -107,43 +107,43 @@ class LabeledFeaturesCoordinator(DataUpdateCoordinator[dict]):
 
     async def async_setup(self) -> None:
         """Set up event listeners and perform initial build."""
-        self._listeners.append(
+        self._bus_listeners.append(
             self.hass.bus.async_listen(
                 "label_registry_updated", self._on_registry_changed
             )
         )
-        self._listeners.append(
+        self._bus_listeners.append(
             self.hass.bus.async_listen(
                 "area_registry_updated", self._on_registry_changed
             )
         )
-        self._listeners.append(
+        self._bus_listeners.append(
             self.hass.bus.async_listen(
                 "floor_registry_updated", self._on_registry_changed
             )
         )
-        self._listeners.append(
+        self._bus_listeners.append(
             self.hass.bus.async_listen(
                 "entity_registry_updated", self._on_registry_changed
             )
         )
-        self._listeners.append(
+        self._bus_listeners.append(
             self.hass.bus.async_listen(
                 "state_changed", self._on_state_changed
             )
         )
-        self._listeners.append(
+        self._bus_listeners.append(
             self.hass.bus.async_listen(
                 EVENT_LABELED_FEATURE_SET, self._on_labeled_feature_set
             )
         )
-        self._listeners.append(
+        self._bus_listeners.append(
             self.hass.bus.async_listen(
                 EVENT_LABELED_FEATURE_SNAPSHOT_SET,
                 self._on_labeled_feature_snapshot_set,
             )
         )
-        self._listeners.append(
+        self._bus_listeners.append(
             self.hass.bus.async_listen(
                 "homeassistant_start", self._on_homeassistant_start
             )
@@ -154,9 +154,9 @@ class LabeledFeaturesCoordinator(DataUpdateCoordinator[dict]):
     @callback
     def async_unload(self) -> None:
         """Clean up listeners."""
-        for listener in self._listeners:
+        for listener in self._bus_listeners:
             listener()
-        self._listeners.clear()
+        self._bus_listeners.clear()
 
     # ------------------------------------------------------------------
     # Event handlers
