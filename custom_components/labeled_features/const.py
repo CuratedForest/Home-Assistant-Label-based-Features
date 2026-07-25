@@ -1,30 +1,198 @@
-"""Constants for the Labeled Features integration.
-
-Minimal config — all configuration is label-driven.
-"""
+"""Constants for the Labeled Features integration."""
 
 from __future__ import annotations
 
-DOMAIN = "labeled_features"
+from typing import Final
 
-PLATFORMS: list[str] = ["sensor"]
+DOMAIN: Final = "labeled_features"
 
-# Sensor entity IDs (fixed, no suffix)
-FEATURES_SENSOR_STEM = "labeled_features_state"
-AREAS_SENSOR_STEM = "labeled_feature_areas_state"
+# ── Config entry keys ────────────────────────────────────────────────────────
+CONF_NAME: Final = "name"
+CONF_PREFIX: Final = "prefix"
+CONF_LEADER_LABEL: Final = "leader_label"
+CONF_DEFAULT_MODE: Final = "default_mode"
+CONF_DEFAULT_SCRIPT_CALL_MODE: Final = "default_script_call_mode"
+CONF_DEFAULT_ERROR_MODE: Final = "default_error_mode"
+CONF_MODE_OVERRIDES: Final = "mode_overrides"
+CONF_SCRIPT_CALL_MODE_OVERRIDES: Final = "script_call_mode_overrides"
 
-# Labels
-LABEL_FEATURE_LEADER = "feature_leader"
+DEFAULT_NAME: Final = "Labeled Features"
+DEFAULT_PREFIX: Final = "labeled_feature"
+# The documented label name (see the Features & Labels docs). Label lookups
+# accept either a label name or a label id, so an existing `feature_leader`
+# label id keeps resolving.
+DEFAULT_LEADER_LABEL: Final = "Feature Leader"
 
-# Events
-EVENT_LABELED_FEATURE_SET = "labeled_feature_set"
-EVENT_LABELED_FEATURE_SNAPSHOT_SET = "labeled_feature_snapshot_set"
+# ── Resolution modes ─────────────────────────────────────────────────────────
+MODE_LEADER: Final = "leader"
+MODE_ANY: Final = "any"
+MODE_ALL: Final = "all"
+MODES: Final = (MODE_LEADER, MODE_ANY, MODE_ALL)
+DEFAULT_MODE: Final = MODE_LEADER
 
-# Error modes
-ERROR_SILENT = "silent"
-ERROR_LOG = "log"
-ERROR_ALERT = "alert"
-ERROR_STOP = "stop"
+# Label-facing (case-sensitive) spellings of the modes.
+MODE_LABEL_VALUES: Final = ("Leader", "Any", "All")
 
-# Config entry options
-CONF_ENABLED = "enabled"
+# ── Script call modes ────────────────────────────────────────────────────────
+SCRIPT_CALL_MODE_BLOCKING: Final = "Blocking"
+SCRIPT_CALL_MODE_NONBLOCKING: Final = "NonBlocking"
+SCRIPT_CALL_MODES: Final = (SCRIPT_CALL_MODE_BLOCKING, SCRIPT_CALL_MODE_NONBLOCKING)
+DEFAULT_SCRIPT_CALL_MODE: Final = SCRIPT_CALL_MODE_BLOCKING
+
+# ── Error modes ──────────────────────────────────────────────────────────────
+ERROR_MODE_SILENT: Final = "silent"
+ERROR_MODE_LOG: Final = "log"
+ERROR_MODE_ALERT: Final = "alert"
+ERROR_MODE_STOP: Final = "stop"
+ERROR_MODES: Final = (
+    ERROR_MODE_SILENT,
+    ERROR_MODE_LOG,
+    ERROR_MODE_ALERT,
+    ERROR_MODE_STOP,
+)
+DEFAULT_ERROR_MODE: Final = ERROR_MODE_LOG
+DEFAULT_ERROR_SOURCE: Final = "Labeled Feature"
+DEFAULT_ERROR_SEVERITY: Final = "medium"
+ERROR_SEVERITIES: Final = ("low", "medium", "high")
+
+ALERT_SCRIPT_ENTITY_ID: Final = "script.send_alert"
+
+# ── Scopes ───────────────────────────────────────────────────────────────────
+SCOPE_AREA: Final = "area"
+SCOPE_FLOOR: Final = "floor"
+SCOPE_GLOBAL: Final = "global"
+# The areas sensor uses `none` where the features sensor uses `global` for the
+# bare (unprefixed) label form. Both are part of the downstream contract.
+SCOPE_NONE: Final = "none"
+FEATURE_SCOPES: Final = (SCOPE_AREA, SCOPE_FLOOR, SCOPE_GLOBAL)
+
+# Label scope prefix -> scope value, for `(Area |Floor |)Leader: <F>` labels.
+SCOPE_PREFIXES: Final = {"Area": SCOPE_AREA, "Floor": SCOPE_FLOOR, "": SCOPE_GLOBAL}
+# Reverse map: scope value -> label prefix (with trailing space) used when
+# building scoped optional-label keys such as `Area Night Invert: True`.
+SCOPE_LABEL_PREFIX: Final = {
+    SCOPE_AREA: "Area ",
+    SCOPE_FLOOR: "Floor ",
+    SCOPE_GLOBAL: "",
+    SCOPE_NONE: "",
+}
+
+# ── Truth function ──────────────────────────────────────────────────────────
+# Generic truthy states for boolean-ish leaders. Compared case-insensitively.
+TRUTHY_STATES: Final = frozenset(
+    {"on", "true", "home", "open", "detected", "active", "unlocked"}
+)
+# States that never represent a real value.
+UNREAL_STATES: Final = frozenset({"unknown", "unavailable", "none"})
+# Event names that are not "the user did the thing" and are skipped.
+SKIP_EVENT_SUFFIX: Final = "_initial_press"
+# Domains whose entities carry no persistent boolean state; every change fires.
+FIRE_ALWAYS_DOMAINS: Final = frozenset({"event", "button"})
+
+# ── Events ───────────────────────────────────────────────────────────────────
+EVENT_SET_FEATURE: Final = "labeled_feature_set"
+EVENT_SET_SNAPSHOT: Final = "labeled_feature_snapshot_set"
+
+# ── Services ─────────────────────────────────────────────────────────────────
+SERVICE_SET_FEATURE: Final = "set_feature"
+SERVICE_SET_SNAPSHOT: Final = "set_snapshot"
+SERVICE_ERROR_MODE: Final = "error_mode"
+
+# ── Attribute names (downstream contract) ────────────────────────────────────
+ATTR_FEATURE_META: Final = "feature_meta"
+ATTR_LEADERS: Final = "leaders"
+ATTR_FEATURES: Final = "features"
+ATTR_SNAPSHOTS: Final = "snapshots"
+ATTR_LABEL_MAP: Final = "label_map"
+ATTR_CONFIG: Final = "config"
+
+ATTR_ENABLED: Final = "enabled"
+ATTR_MODE: Final = "mode"
+ATTR_LAST_CHANGED_TIMESTAMP: Final = "last_changed_timestamp"
+ATTR_TRIGGERING_LEADER: Final = "triggering_leader"
+ATTR_CURRENT_VALUE: Final = "current_value"
+ATTR_PREVIOUS_VALUE: Final = "previous_value"
+
+# ── Area based features ──────────────────────────────────────────────────────
+DEFAULT_AREA_COMPONENT: Final = "select"
+LABEL_MAP_KEY_SEPARATOR: Final = "||"
+# `Provides <Feature> <Keyword>: <value>` modifier labels must not register as
+# features in their own right.
+PROVIDES_MODIFIER_KEYWORDS: Final = (
+    "Component",
+    "Min",
+    "Max",
+    "Step",
+    "Unit",
+    "Icon",
+    "Initial",
+    "Static",
+    "Mode",
+    "Device Class",
+)
+
+# ── Feature catalog ─────────────────────────────────────────────────────────
+# Single source of truth for the generic-feature catalog, byte-compatible with
+# the `feature_meta` attribute of the legacy template sensor.
+#   domain       - HA domain used as the fallback target pool ('' = none)
+#   kind         - internal action key consumed by labeled_feature_generics
+#   domain_label - provider grouping for the `Provides: <DomainLabel>` shorthand
+FEATURE_META: Final[dict[str, dict[str, str]]] = {
+    "Media Toggle": {
+        "domain": "media_player",
+        "kind": "media_toggle",
+        "domain_label": "Media Player",
+    },
+    "Media Play": {
+        "domain": "media_player",
+        "kind": "media_play",
+        "domain_label": "Media Player",
+    },
+    "Media Pause": {
+        "domain": "media_player",
+        "kind": "media_pause",
+        "domain_label": "Media Player",
+    },
+    "Media Next": {
+        "domain": "media_player",
+        "kind": "media_next",
+        "domain_label": "Media Player",
+    },
+    "Media Previous": {
+        "domain": "media_player",
+        "kind": "media_previous",
+        "domain_label": "Media Player",
+    },
+    "Media Seek Back": {
+        "domain": "media_player",
+        "kind": "media_seek_back",
+        "domain_label": "Media Player",
+    },
+    "Media Seek Forward": {
+        "domain": "media_player",
+        "kind": "media_seek_forward",
+        "domain_label": "Media Player",
+    },
+    "Volume Up": {
+        "domain": "media_player",
+        "kind": "volume_up",
+        "domain_label": "Media Player",
+    },
+    "Volume Down": {
+        "domain": "media_player",
+        "kind": "volume_down",
+        "domain_label": "Media Player",
+    },
+    "Lights On": {"domain": "light", "kind": "light_on", "domain_label": "Light"},
+    "Lights Off": {"domain": "light", "kind": "light_off", "domain_label": "Light"},
+    "Lights Up": {"domain": "light", "kind": "light_up", "domain_label": "Light"},
+    "Lights Down": {"domain": "light", "kind": "light_down", "domain_label": "Light"},
+    "Fan On": {"domain": "fan", "kind": "fan_on", "domain_label": "Fan"},
+    "Fan Off": {"domain": "fan", "kind": "fan_off", "domain_label": "Fan"},
+    "Fan Up": {"domain": "fan", "kind": "fan_up", "domain_label": "Fan"},
+    "Fan Down": {"domain": "fan", "kind": "fan_down", "domain_label": "Fan"},
+}
+
+# ── Misc ─────────────────────────────────────────────────────────────────────
+# Debounce window for registry-driven recomputes, in seconds.
+REGISTRY_DEBOUNCE_SECONDS: Final = 1.0

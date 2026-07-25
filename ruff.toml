@@ -1,0 +1,17 @@
+line-length = 88
+target-version = "py312"
+
+[lint]
+select = ["E", "F", "W", "I", "UP", "B", "D", "SIM", "RUF"]
+ignore = [
+  "D203", # incompatible with D211
+  "D213", # incompatible with D212
+]
+
+[lint.isort]
+force-sort-within-sections = true
+known-first-party = ["custom_components", "homeassistant", "tests"]
+combine-as-imports = true
+
+[lint.per-file-ignores]
+"tests/*" = ["D103", "SIM117"]

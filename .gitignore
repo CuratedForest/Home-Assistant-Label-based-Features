@@ -1,2 +1,8 @@
 .agents/skills/
+.claude/skills/
+skills-lock.json
 **/__pycache__/*
+.venv/
+.pytest_cache/
+.ruff_cache/
+.kilo/

@@ -1,81 +1,62 @@
-"""Labeled Features custom component.
+"""The Labeled Features integration.
 
-Minimal config — all configuration is label-driven.
+Native implementation of the state layer of the Label Based Features system:
+the ``Labeled Features State`` and ``Labeled Feature Areas State`` sensors,
+plus tiered error handling. Every downstream consumer (the Leaders/Areas
+automations and the ``labeled_feature_*`` scripts) keeps working unchanged.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, PLATFORMS
-from .coordinator import (
-    LabeledFeatureAreasCoordinator,
-    LabeledFeaturesCoordinator,
-)
-from .services import async_setup_services
+from .const import DOMAIN
+from .coordinator import LabeledFeaturesCoordinator
+from .services import async_setup_services, async_unload_services
 
-_LOGGER = logging.getLogger(__name__)
+_LOGGER = logging.getLogger(__package__)
+
+PLATFORMS: list[Platform] = [Platform.SENSOR]
 
 
-async def async_setup_entry(
-    hass: HomeAssistant, entry: ConfigEntry
-) -> bool:
-    """Set up Labeled Features from a config entry."""
-    _LOGGER.info("Setting up Labeled Features integration")
+async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Set up a Labeled Features instance."""
+    coordinator = LabeledFeaturesCoordinator(hass, entry)
+    hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
-    # Create coordinators
-    features_coordinator = LabeledFeaturesCoordinator(hass)
-    areas_coordinator = LabeledFeatureAreasCoordinator(hass)
-
-    # Set up coordinators (register event listeners)
-    await features_coordinator.async_setup()
-    await areas_coordinator.async_setup()
-
-    # Store in hass.data for sensor access
-    if "labeled_features" not in hass.data:
-        hass.data["labeled_features"] = {}
-    hass.data["labeled_features"]["features_coordinator"] = features_coordinator
-    hass.data["labeled_features"]["areas_coordinator"] = areas_coordinator
-
-    # Set up services
-    await async_setup_services(hass)
-
-    # Forward platform setup
+    # Entities restore their attributes into the coordinator during platform
+    # setup, so subscriptions and the first reconcile must come afterwards.
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    await coordinator.async_start()
 
+    async_setup_services(hass)
+    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
     return True
 
 
-async def async_unload_entry(
-    hass: HomeAssistant, entry: ConfigEntry
-) -> bool:
-    """Unload a config entry."""
-    unload_ok = await hass.config_entries.async_unload_platforms(
-        entry, PLATFORMS
+async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Unload a Labeled Features instance."""
+    if not await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
+        # Leave the instance intact: HA keeps the entry loaded, so tearing the
+        # coordinator down here would leave a live-but-gutted entry whose next
+        # reload fails in the sensor platform.
+        return False
+
+    coordinator: LabeledFeaturesCoordinator | None = hass.data.get(DOMAIN, {}).pop(
+        entry.entry_id, None
     )
-
-    if unload_ok:
-        features_coordinator = hass.data["labeled_features"]["features_coordinator"]
-        areas_coordinator = hass.data["labeled_features"]["areas_coordinator"]
-
-        await features_coordinator.async_shutdown()
-        await areas_coordinator.async_shutdown()
-
-        # Clean up hass.data
-        if "labeled_features" in hass.data:
-            del hass.data["labeled_features"]
-
-    return unload_ok
+    if coordinator is not None:
+        coordinator.async_shutdown()
+    if not hass.data.get(DOMAIN):
+        hass.data.pop(DOMAIN, None)
+        async_unload_services(hass)
+    return True
 
 
-async def async_remove_entry(
-    hass: HomeAssistant, entry: ConfigEntry
-) -> None:
-    """Remove a config entry."""
-    if "labeled_features" in hass.data:
-        del hass.data["labeled_features"]
+async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Reload the instance when its options change."""
+    await hass.config_entries.async_reload(entry.entry_id)
