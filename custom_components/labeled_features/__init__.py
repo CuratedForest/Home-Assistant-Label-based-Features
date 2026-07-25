@@ -18,6 +18,8 @@ from homeassistant.core import (
     callback,
 )
 from homeassistant.helpers import area_registry as ar
+from homeassistant.helpers import entity_registry as er
+from homeassistant.helpers import floor_registry as fr
 from homeassistant.util import dt as dt_util
 
 from .const import (
