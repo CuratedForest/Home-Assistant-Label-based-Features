@@ -3,36 +3,136 @@
     "step": {
       "user": {
         "title": "Labeled Features",
-        "description": "Labeled Features is a label-driven feature management system. No additional configuration is required."
-      },
-      "init": {
-        "title": "Labeled Features",
+        "description": "Leaders, features and followers are always configured with labels. These settings are the instance-level values that used to live as labels on the template sensors; labels on the created sensor entities still win over them.",
         "data": {
-          "enabled": "Enable Labeled Features"
+          "name": "Instance name",
+          "prefix": "Entity slug prefix",
+          "leader_label": "Leader label",
+          "default_mode": "Default resolution mode",
+          "default_script_call_mode": "Default script call mode",
+          "default_error_mode": "Default error mode",
+          "mode_overrides": "Per-feature resolution modes",
+          "script_call_mode_overrides": "Per-feature script call modes"
+        },
+        "data_description": {
+          "prefix": "Sensors are created as sensor.<prefix>s_state and sensor.<prefix>_areas_state. The default 'labeled_feature' reproduces the legacy entity IDs. This cannot be changed later.",
+          "leader_label": "Label that identifies leader entities and the areas scanned for 'Provides:' declarations.",
+          "default_mode": "Used when no '<Scoped Feature> Mode:' label or override matches.",
+          "default_script_call_mode": "Forward-looking default. The YAML Leaders automation still reads Script Call Mode from labels on the sensor.",
+          "mode_overrides": "One per line, using label syntax: 'Area Night Mode: All'.",
+          "script_call_mode_overrides": "One per line, using label syntax: 'Area Sleep Timer Script Call Mode: NonBlocking'."
         }
+      }
+    },
+    "error": {
+      "invalid_prefix": "The prefix must be a valid slug (lowercase letters, digits and underscores).",
+      "prefix_in_use": "Another Labeled Features instance already uses this prefix.",
+      "leader_label_required": "A leader label is required.",
+      "invalid_mode_override": "Every line must look like '<Scoped Feature> Mode: Leader|Any|All'.",
+      "invalid_script_call_mode_override": "Every line must look like '<Scoped Feature> Script Call Mode: Blocking|NonBlocking'."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Labeled Features options",
+        "description": "The entity slug prefix cannot be changed here; rename the entities in the entity registry instead.",
+        "data": {
+          "leader_label": "Leader label",
+          "default_mode": "Default resolution mode",
+          "default_script_call_mode": "Default script call mode",
+          "default_error_mode": "Default error mode",
+          "mode_overrides": "Per-feature resolution modes",
+          "script_call_mode_overrides": "Per-feature script call modes"
+        },
+        "data_description": {
+          "leader_label": "Label that identifies leader entities and the areas scanned for 'Provides:' declarations.",
+          "mode_overrides": "One per line, using label syntax: 'Area Night Mode: All'.",
+          "script_call_mode_overrides": "One per line, using label syntax: 'Area Sleep Timer Script Call Mode: NonBlocking'."
+        }
+      }
+    },
+    "error": {
+      "leader_label_required": "A leader label is required.",
+      "invalid_mode_override": "Every line must look like '<Scoped Feature> Mode: Leader|Any|All'.",
+      "invalid_script_call_mode_override": "Every line must look like '<Scoped Feature> Script Call Mode: Blocking|NonBlocking'."
+    }
+  },
+  "selector": {
+    "resolution_mode": {
+      "options": {
+        "leader": "Leader — only the leader that drove the tick",
+        "any": "Any — OR across every leader of the triple",
+        "all": "All — AND across every leader of the triple"
+      }
+    },
+    "error_mode": {
+      "options": {
+        "silent": "Silent — skip",
+        "log": "Log — warn and continue",
+        "alert": "Alert — script.send_alert and continue",
+        "stop": "Stop — log and halt"
       }
     }
   },
   "services": {
-    "handle_error": {
-      "name": "Handle Error",
-      "description": "Route an error through the labeled features error handling framework.",
+    "set_feature": {
+      "name": "Set feature",
+      "description": "Write a manual override into the Labeled Features State sensor's features attribute.",
+      "fields": {
+        "target_feature": {
+          "name": "Target feature",
+          "description": "The feature name whose state to write."
+        },
+        "scope": { "name": "Scope", "description": "area, floor or global." },
+        "scope_id": {
+          "name": "Scope ID",
+          "description": "The area_id or floor_id. Empty for global scope."
+        },
+        "enabled": { "name": "Enabled", "description": "The value to record." },
+        "instance": {
+          "name": "Instance",
+          "description": "Optional instance to target."
+        }
+      }
+    },
+    "set_snapshot": {
+      "name": "Set snapshot",
+      "description": "Merge or delete an entry in the snapshots attribute.",
+      "fields": {
+        "snapshot_name": {
+          "name": "Snapshot name",
+          "description": "Short script-chosen identifier."
+        },
+        "payload": {
+          "name": "Payload",
+          "description": "Mapping to store. Empty deletes the entry."
+        },
+        "instance": {
+          "name": "Instance",
+          "description": "Optional instance to target."
+        }
+      }
+    },
+    "error_mode": {
+      "name": "Error mode",
+      "description": "Dispatch a message through the Labeled Features error tiers.",
       "fields": {
         "error_mode": {
-          "name": "Error Mode",
-          "description": "Error handling tier: silent, log, alert, or stop."
+          "name": "Error mode",
+          "description": "silent, log, alert or stop."
         },
         "message": {
           "name": "Message",
-          "description": "Human-readable error message."
+          "description": "Human-readable message describing what went wrong."
         },
         "source": {
           "name": "Source",
-          "description": "Short label for the error source."
+          "description": "Short label prefixed onto logs and alerts."
         },
         "severity": {
           "name": "Severity",
-          "description": "Severity level for the alert tier."
+          "description": "Severity used by the alert tier."
         }
       }
     }

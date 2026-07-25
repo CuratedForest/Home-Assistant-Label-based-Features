@@ -1,50 +1,118 @@
-# Services for Labeled Features component
-
-handle_error:
-  name: Handle Error
-  description: >
-    Route an error through the labeled features error handling framework.
-    Equivalent to the legacy script.labeled_feature_error_mode.
+set_feature:
+  name: Set feature
+  description: >-
+    Write a manual override into the Labeled Features State sensor's `features`
+    attribute. Equivalent to the `Set Feature` catalog entry of
+    script.labeled_feature_generics, but validated.
   fields:
-    error_mode:
+    target_feature:
+      name: Target feature
+      description: The feature name whose state to write (e.g. Night).
       required: true
-      description: Error handling tier
-      example: "log"
+      example: Night
+      selector:
+        text:
+    scope:
+      name: Scope
+      description: area | floor | global.
+      required: true
+      default: global
       selector:
         select:
           options:
-            - label: Silent
-              value: silent
-            - label: Log
-              value: log
-            - label: Alert
-              value: alert
-            - label: Stop
-              value: stop
-    message:
-      required: true
-      description: Human-readable error message
-      example: "No targets resolved for feature 'Night'."
+            - area
+            - floor
+            - global
+    scope_id:
+      name: Scope ID
+      description: The area_id or floor_id. Leave empty for global scope.
+      required: false
+      example: bedroom_main
       selector:
         text:
-    source:
+    enabled:
+      name: Enabled
+      description: The value to record.
+      required: true
+      selector:
+        boolean:
+    instance:
+      name: Instance
+      description: >-
+        Optional Labeled Features instance (config entry title or id) to target.
+        Defaults to the instance that owns the feature.
       required: false
-      default: "Labeled Features"
-      description: Short label for the error source
-      example: "Labeled Feature Generics"
+      selector:
+        text:
+
+set_snapshot:
+  name: Set snapshot
+  description: >-
+    Merge or delete an entry in the Labeled Features State sensor's `snapshots`
+    attribute. An empty payload deletes the entry.
+  fields:
+    snapshot_name:
+      name: Snapshot name
+      description: Short script-chosen identifier, e.g. sleep_timeout.
+      required: true
+      example: sleep_timeout
+      selector:
+        text:
+    payload:
+      name: Payload
+      description: Mapping to store. An empty mapping deletes the entry.
+      required: true
+      selector:
+        object:
+    instance:
+      name: Instance
+      description: >-
+        Optional Labeled Features instance (config entry title or id) to target.
+        Defaults to the instance that owns the snapshot.
+      required: false
+      selector:
+        text:
+
+error_mode:
+  name: Error mode
+  description: >-
+    Dispatch a message through the Labeled Features error tiers. Mirrors
+    script.labeled_feature_error_mode; the stop tier raises so the caller halts.
+  fields:
+    error_mode:
+      name: Error mode
+      description: silent | log | alert | stop.
+      required: false
+      default: log
+      selector:
+        select:
+          options:
+            - silent
+            - log
+            - alert
+            - stop
+    message:
+      name: Message
+      description: Human-readable message describing what went wrong.
+      required: true
+      selector:
+        text:
+          multiline: true
+    source:
+      name: Source
+      description: Short label prefixed onto logs and alerts.
+      required: false
+      default: Labeled Feature
       selector:
         text:
     severity:
+      name: Severity
+      description: Severity used by the alert tier.
       required: false
-      default: "medium"
-      description: Severity level for the alert tier
-      example: "high"
+      default: medium
       selector:
         select:
           options:
-            - label: Low
-              value: low
-            - label: Medium
-              value: medium
-            - label: High
-              value: high
+            - low
+            - medium
+            - high
