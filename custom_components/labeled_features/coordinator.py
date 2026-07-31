@@ -195,6 +195,7 @@ class LabeledFeaturesCoordinator:
         self._areas_listeners: list[Callable[[], None]] = []
         self._unsubs: list[Callable[[], None]] = []
         self._started = False
+        self._published_initial = False
         # Registry-derived caches, refreshed only on a registry reconcile, so
         # the state_changed firehose and every tick stay off the registries.
         self._leader_ids: set[str] = set()
@@ -357,15 +358,54 @@ class LabeledFeaturesCoordinator:
 
     @callback
     def _write_features(self) -> None:
-        """Publish a fresh snapshot and push one state write."""
-        self._publish_features()
+        """Publish a fresh snapshot and push one state write.
+
+        Only notifies listeners when the data actually changed. Home Assistant
+        compares state attributes shallowly (by reference), so publishing a
+        fresh object every tick would cause downstream automations to fire on
+        every state_changed event even though the data is identical — causing
+        constant noise and errors.
+
+        We deep-compare the new published tree against the previous one and
+        only notify listeners when something actually changed.
+
+        """
+        new_leaders = snapshot_tree(self.leaders)
+        new_features = snapshot_tree(self.features)
+        new_snapshots = snapshot_tree(self.snapshots)
+
+        if (
+            not self._published_initial
+            or (
+                new_leaders == self._published_leaders
+                and new_features == self._published_features
+                and new_snapshots == self._published_snapshots
+            )
+        ):
+            if self._published_initial:
+                return
+            self._published_initial = True
+
+        self._published_leaders = new_leaders
+        self._published_features = new_features
+        self._published_snapshots = new_snapshots
         for listener in list(self._features_listeners):
             listener()
 
     @callback
     def _write_areas(self) -> None:
-        """Publish a fresh snapshot and push one state write."""
-        self._publish_label_map()
+        """Publish a fresh snapshot and push one state write.
+
+        Only notifies listeners when the data actually changed (same rationale
+        as ``_write_features``).
+
+        """
+        new_label_map = snapshot_tree(self.label_map)
+        if self._published_initial and new_label_map == self._published_label_map:
+            return
+        if not self._published_initial:
+            self._published_initial = True
+        self._published_label_map = new_label_map
         for listener in list(self._areas_listeners):
             listener()
 
