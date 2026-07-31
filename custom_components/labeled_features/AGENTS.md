@@ -1,4 +1,4 @@
-<!-- Managed by agent: keep sections and order; edit content, not structure. Last updated: 2026-07-25 -->
+<!-- Managed by agent: keep sections and order; edit content, not structure. Last updated: 2026-07-26 -->
 
 # AGENTS.md — custom_components/labeled_features
 
@@ -17,7 +17,7 @@ is local-push: no polling, no network, no dependencies (`manifest.json` requirem
 | `errors.py` | `silent`/`log`/`alert`/`stop` tiers + precedence resolution | Reporting an internal error |
 | `coordinator.py` | Per-entry state machine, event wiring, publication | Wiring events, changing when state is written |
 | `sensor.py` | The two `SensorEntity` + `RestoreEntity` classes | Entity naming, restore, attribute exposure |
-| `config_flow.py` | Config + options flow, override-line validation | Adding a setting to the UI |
+| `config_flow.py` | Config + options flow, override-line validation, subentry flows | Adding a setting or subentry type to the UI |
 | `routing.py` | Which instance consumes an untargeted compat event | Multi-instance behavior |
 | `services.py` / `services.yaml` | `set_feature`, `set_snapshot`, `error_mode` actions | Adding or changing an action |
 | `diagnostics.py` | Config-entry diagnostics dump | Adding debuggable state |
@@ -90,9 +90,15 @@ rebuilt only in `_async_refresh_registry`, which is debounced behind
 - Optional labels must carry the grouping label's scope prefix: `Area Leader: Night` pairs with
   `Area Night Enable: …`, never bare `Night Enable: …`. Use `SCOPE_LABEL_PREFIX` /
   `Triple.label_prefix`, never hand-written `"Area "` literals.
+- **Subentries synthesize labels, never bypass them.** Leader/provides subentries become
+  synthetic label strings in `_async_refresh_registry` (`subentry_leader_labels` /
+  `subentry_provides_labels`), so the pure pipeline and the hot path stay subentry-agnostic.
+  A real label covering the same thing wins (`grouping_label_covers` /
+  `provides_label_covers`); mode subentries slot between sensor labels and option overrides
+  in `resolve_mode`.
 
 ## Setup & environment
-- Python 3.12, Home Assistant 2025.1+. No runtime dependencies.
+- Python 3.13, Home Assistant 2025.7+ (config subentry flows). No runtime dependencies.
 - Async throughout; nothing here may block the event loop.
 - `hass.data[DOMAIN][entry.entry_id]` holds the coordinator; setup order is
   **forward platforms → `coordinator.async_start()`** so entities restore their attributes

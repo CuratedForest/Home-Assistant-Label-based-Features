@@ -8,7 +8,25 @@ from typing import Any
 import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.labeled_features.const import (
+from homeassistant import config_entries as _config_entries
+
+# PHCC 0.13.205's MockConfigEntry predates the required `subentries_data`
+# keyword-only argument (Home Assistant 2025.7+). Default it at the HA
+# boundary so the mock keeps working; the constructor treats None as ().
+_config_entry_init = _config_entries.ConfigEntry.__init__
+
+
+def _patched_config_entry_init(self, *args: Any, **kwargs: Any) -> None:
+    """Inject the subentries_data default PHCC omits."""
+    kwargs.setdefault("subentries_data", None)
+    _config_entry_init(self, *args, **kwargs)
+
+
+_config_entries.ConfigEntry.__init__ = _patched_config_entry_init
+
+from custom_components.labeled_features.const import (  # noqa: E402
+    CONF_ALERT_ACTION,
+    CONF_ALERT_SEVERITY,
     CONF_DEFAULT_ERROR_MODE,
     CONF_DEFAULT_MODE,
     CONF_DEFAULT_SCRIPT_CALL_MODE,
@@ -17,6 +35,8 @@ from custom_components.labeled_features.const import (
     CONF_NAME,
     CONF_PREFIX,
     CONF_SCRIPT_CALL_MODE_OVERRIDES,
+    DEFAULT_ALERT_ACTION,
+    DEFAULT_ALERT_SEVERITY,
     DEFAULT_ERROR_MODE,
     DEFAULT_LEADER_LABEL,
     DEFAULT_MODE,
@@ -24,8 +44,8 @@ from custom_components.labeled_features.const import (
     DEFAULT_SCRIPT_CALL_MODE,
     DOMAIN,
 )
-from homeassistant.core import HomeAssistant
-from homeassistant.helpers import (
+from homeassistant.core import HomeAssistant  # noqa: E402
+from homeassistant.helpers import (  # noqa: E402
     area_registry as ar,
     entity_registry as er,
     floor_registry as fr,
@@ -64,6 +84,8 @@ def make_entry(
             CONF_DEFAULT_MODE: DEFAULT_MODE,
             CONF_DEFAULT_SCRIPT_CALL_MODE: DEFAULT_SCRIPT_CALL_MODE,
             CONF_DEFAULT_ERROR_MODE: DEFAULT_ERROR_MODE,
+            CONF_ALERT_ACTION: DEFAULT_ALERT_ACTION,
+            CONF_ALERT_SEVERITY: DEFAULT_ALERT_SEVERITY,
             CONF_MODE_OVERRIDES: "",
             CONF_SCRIPT_CALL_MODE_OVERRIDES: "",
             **options,

@@ -11,6 +11,8 @@
           "default_mode": "Default resolution mode",
           "default_script_call_mode": "Default script call mode",
           "default_error_mode": "Default error mode",
+          "alert_action": "Alert action",
+          "alert_severity": "Alert severity",
           "mode_overrides": "Per-feature resolution modes",
           "script_call_mode_overrides": "Per-feature script call modes"
         },
@@ -19,6 +21,8 @@
           "leader_label": "Label that identifies leader entities and the areas scanned for 'Provides:' declarations.",
           "default_mode": "Used when no '<Scoped Feature> Mode:' label or override matches.",
           "default_script_call_mode": "Forward-looking default. The YAML Leaders automation still reads Script Call Mode from labels on the sensor.",
+          "alert_action": "Action called by the alert error tier with alert_severity / alert_title / alert_message fields.",
+          "alert_severity": "Severity passed to the alert action.",
           "mode_overrides": "One per line, using label syntax: 'Area Night Mode: All'.",
           "script_call_mode_overrides": "One per line, using label syntax: 'Area Sleep Timer Script Call Mode: NonBlocking'."
         }
@@ -28,6 +32,7 @@
       "invalid_prefix": "The prefix must be a valid slug (lowercase letters, digits and underscores).",
       "prefix_in_use": "Another Labeled Features instance already uses this prefix.",
       "leader_label_required": "A leader label is required.",
+      "alert_action_invalid": "The alert action must look like 'domain.service', e.g. script.send_alert.",
       "invalid_mode_override": "Every line must look like '<Scoped Feature> Mode: Leader|Any|All'.",
       "invalid_script_call_mode_override": "Every line must look like '<Scoped Feature> Script Call Mode: Blocking|NonBlocking'."
     }
@@ -42,11 +47,15 @@
           "default_mode": "Default resolution mode",
           "default_script_call_mode": "Default script call mode",
           "default_error_mode": "Default error mode",
+          "alert_action": "Alert action",
+          "alert_severity": "Alert severity",
           "mode_overrides": "Per-feature resolution modes",
           "script_call_mode_overrides": "Per-feature script call modes"
         },
         "data_description": {
           "leader_label": "Label that identifies leader entities and the areas scanned for 'Provides:' declarations.",
+          "alert_action": "Action called by the alert error tier with alert_severity / alert_title / alert_message fields.",
+          "alert_severity": "Severity passed to the alert action.",
           "mode_overrides": "One per line, using label syntax: 'Area Night Mode: All'.",
           "script_call_mode_overrides": "One per line, using label syntax: 'Area Sleep Timer Script Call Mode: NonBlocking'."
         }
@@ -54,8 +63,131 @@
     },
     "error": {
       "leader_label_required": "A leader label is required.",
+      "alert_action_invalid": "The alert action must look like 'domain.service', e.g. script.send_alert.",
       "invalid_mode_override": "Every line must look like '<Scoped Feature> Mode: Leader|Any|All'.",
       "invalid_script_call_mode_override": "Every line must look like '<Scoped Feature> Script Call Mode: Blocking|NonBlocking'."
+    }
+  },
+  "config_subentries": {
+    "leader": {
+      "entry_type": "Leader definition",
+      "initiate_flow": {
+        "user": "Add leader definition"
+      },
+      "step": {
+        "user": {
+          "title": "Add leader definition",
+          "description": "Define a feature leader without labels. Equivalent to `Feature Leader` + `(Area |Floor |)Leader: <Feature>` plus modifier labels. Used only when the entity has no label definition for the same feature/scope — labels win on conflict.",
+          "data": {
+            "entity_id": "Leader entity",
+            "feature": "Feature name",
+            "scope": "Scope",
+            "enable_value": "Enable value (optional)",
+            "disable_value": "Disable value (optional)",
+            "direction": "Direction (optional)",
+            "invert": "Invert"
+          },
+          "data_description": {
+            "feature": "Case-sensitive feature name (e.g. Night).",
+            "scope": "area / floor / global — equivalent to the Area / Floor / bare label prefix.",
+            "enable_value": "Enabled while state equals this value.",
+            "disable_value": "Disabled while state equals this value.",
+            "direction": "Numeric direction evaluation. Takes precedence over enable/disable values.",
+            "invert": "Invert the evaluated result (applies last)."
+          }
+        },
+        "reconfigure": {
+          "title": "Edit leader definition",
+          "data": {
+            "entity_id": "Leader entity",
+            "feature": "Feature name",
+            "scope": "Scope",
+            "enable_value": "Enable value (optional)",
+            "disable_value": "Disable value (optional)",
+            "direction": "Direction (optional)",
+            "invert": "Invert"
+          }
+        }
+      },
+      "error": {
+        "feature_required": "A feature name is required."
+      },
+      "abort": {
+        "already_configured": "This leader definition already exists."
+      }
+    },
+    "provides": {
+      "entry_type": "Provides declaration",
+      "initiate_flow": {
+        "user": "Add Provides declaration"
+      },
+      "step": {
+        "user": {
+          "title": "Add Provides declaration",
+          "description": "Declare an area-level Provides feature without labels. Equivalent to an `(Area |Floor |)Provides: <Feature>` label on the area (plus optional Component modifier). Used only when the area has no label declaration for the same feature/scope — labels win on conflict.",
+          "data": {
+            "area_id": "Declaring area",
+            "feature": "Feature (label) name",
+            "scope": "Scope",
+            "component": "Component hint"
+          },
+          "data_description": {
+            "feature": "Case-sensitive feature name (e.g. Audio Mode).",
+            "scope": "area / floor / none — equivalent to the Area / Floor / bare label prefix.",
+            "component": "Component hint recorded in label_map (default select)."
+          }
+        },
+        "reconfigure": {
+          "title": "Edit Provides declaration",
+          "data": {
+            "area_id": "Declaring area",
+            "feature": "Feature (label) name",
+            "scope": "Scope",
+            "component": "Component hint"
+          }
+        }
+      },
+      "error": {
+        "feature_required": "A feature name is required."
+      },
+      "abort": {
+        "already_configured": "This Provides declaration already exists."
+      }
+    },
+    "mode": {
+      "entry_type": "Feature mode",
+      "initiate_flow": {
+        "user": "Add feature mode"
+      },
+      "step": {
+        "user": {
+          "title": "Add feature mode",
+          "description": "Set the fold mode for a (feature, scope) pair without labels. Equivalent to a `<Scoped Feature> Mode: Leader|Any|All` label on the sensor entity. A matching Mode label on the sensor wins over this subentry.",
+          "data": {
+            "feature": "Feature name",
+            "scope": "Scope",
+            "mode": "Mode"
+          },
+          "data_description": {
+            "feature": "Case-sensitive feature name (e.g. Night).",
+            "mode": "leader = only the triggering leader counts; any = OR over all mapped leaders; all = AND over all mapped leaders."
+          }
+        },
+        "reconfigure": {
+          "title": "Edit feature mode",
+          "data": {
+            "feature": "Feature name",
+            "scope": "Scope",
+            "mode": "Mode"
+          }
+        }
+      },
+      "error": {
+        "feature_required": "A feature name is required."
+      },
+      "abort": {
+        "already_configured": "This feature mode already exists."
+      }
     }
   },
   "selector": {

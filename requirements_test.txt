@@ -1,3 +1,40 @@
-pytest-homeassistant-custom-component==0.13.205
+# Test environment. Home Assistant 2025.7.4 is the floor (config subentry
+# flows) and requires Python 3.13+.
+#
+# Install in TWO steps (see tests/AGENTS.md):
+#   pip install -r requirements_test.txt
+#   pip install --no-deps pytest-homeassistant-custom-component==0.13.205
+#
+# PHCC is installed separately with --no-deps because its exact homeassistant
+# pin (2025.1.4) lags the version tested against. The packages below cover
+# both Home Assistant 2025.7.4 and PHCC's own runtime dependencies.
+homeassistant==2025.7.4
+# aiodns 3.5.0 (Home Assistant's pin) is incompatible with pycares 5.x.
+pycares<5
+coverage
+freezegun
+license-expression
+mock-open
+numpy
+paho-mqtt
+pipdeptree
+pydantic
+pylint-per-file-ignores
+pytest
+pytest-aiohttp
+pytest-asyncio
+pytest-cov
+pytest-freezer
+pytest-github-actions-annotate-failures
+pytest-picked
+pytest-socket
+pytest-sugar
+pytest-timeout
+pytest-unordered
+pytest-xdist
+requests-mock
+respx
+syrupy
+tqdm
 ruff
 black

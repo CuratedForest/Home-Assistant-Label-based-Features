@@ -1,23 +1,24 @@
-<!-- Managed by agent: keep sections and order; edit content, not structure. Last updated: 2026-07-25 -->
+<!-- Managed by agent: keep sections and order; edit content, not structure. Last updated: 2026-07-26 -->
 
 # AGENTS.md — tests
 
 ## Overview
-`pytest-homeassistant-custom-component` suite for the `labeled_features` integration. 142 cases,
+`pytest-homeassistant-custom-component` suite for the `labeled_features` integration. 174 cases,
 ~4s for the whole run, so run it all rather than guessing which file is relevant.
 
 ## Key Files
 | File | Covers |
 |------|--------|
-| `conftest.py` | Fixtures and registry helpers (see below) |
-| `test_features.py` | Pure logic: truth function matrix, direction, Any/All fold, timestamp bumps, orphan drop |
+| `conftest.py` | Fixtures and registry helpers (see below), plus the PHCC compat shim |
+| `test_features.py` | Pure logic: truth function matrix, direction, Any/All fold, timestamp bumps, orphan drop, subentry label synthesis |
 | `test_labels.py` | Registry helpers: device-label non-inheritance, area→device fallback, label id/name lookup, parsers |
-| `test_areas.py` | `label_map`: scopes, modifier rejection, component override, floor dedup |
+| `test_areas.py` | `label_map`: scopes, modifier rejection, component override, floor dedup, provides-subentry fill-in |
 | `test_sensor.py` | End-to-end sensor behavior: entity IDs, leader ticks, modes, restore, unload |
 | `test_publication.py` | **Write-path regressions** — every write must emit a `state_changed` event; routing |
 | `test_coordinator.py` | Override parsing, debounced registry path, `config` attribute, diagnostics, actions |
-| `test_config_flow.py` | Config + options flow, including every validation error |
-| `test_errors.py` | The four error tiers and precedence resolution |
+| `test_config_flow.py` | Config + options + subentry flows, including every validation error |
+| `test_subentries.py` | Subentry → state machine: leader seeding, label-wins conflicts, provides in `label_map`, mode folding |
+| `test_errors.py` | The four error tiers, configurable alert action, precedence resolution |
 
 ## Golden Samples (follow these patterns)
 | For | Reference |
@@ -30,12 +31,18 @@
 
 ## Setup & environment
 ```bash
-python -m venv .venv && . .venv/bin/activate
-pip install -r requirements_test.txt   # pins pytest-homeassistant-custom-component
-pytest -q
+uv venv --python 3.13 .venv
+.venv/bin/pip install -r requirements_test.txt
+.venv/bin/pip install --no-deps pytest-homeassistant-custom-component==0.13.205
+.venv/bin/pytest -q
 ```
-`pytest.ini` sets `asyncio_mode = auto`, so `async def test_*` needs no decorator, and
-`conftest.py` enables custom integrations for every test automatically.
+The suite runs against **Home Assistant 2025.7.4 on Python 3.13** (the floor for config
+subentry flows). PHCC is installed with `--no-deps` because its exact HA pin (2025.1.4) lags;
+`requirements_test.txt` covers both HA's and PHCC's runtime dependencies. `conftest.py`
+patches `ConfigEntry.__init__` with the `subentries_data` default PHCC's `MockConfigEntry`
+omits — remove the shim if PHCC is ever bumped past it. `pytest.ini` sets
+`asyncio_mode = auto`, so `async def test_*` needs no decorator, and `conftest.py` enables
+custom integrations for every test automatically.
 
 ## Running tests
 | Task | Command |

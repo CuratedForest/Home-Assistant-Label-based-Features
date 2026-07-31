@@ -12,13 +12,16 @@ working unchanged.
 | `sensor.labeled_features_state` | `automation.labeled_feature_leaders`, `script.labeled_feature_follower`, `script.labeled_feature_generics`, `script.labeled_feature_sleep_timeout` |
 | `sensor.labeled_feature_areas_state` | `automation.labeled_feature_areas`, `script.labeled_feature_area` |
 
-Leaders, features and followers are still configured **entirely with labels**.
-The config flow only carries the instance-level settings that used to live as
-labels on the template sensors — and labels on the new sensor entities still
-win over the config entry.
+Leaders, features and followers are still configured **with labels** — or,
+equivalently, with config subentries from the integration card. The config
+flow only carries the instance-level settings that used to live as labels on
+the template sensors — and labels on the new sensor entities still win over
+the config entry *and* over subentries.
 
 Not in scope for Phase 1: the Leaders/Areas automations, the dispatch loop, the
 follower/button/generics/area/entities/sleep-timeout scripts. Those stay in YAML.
+
+**Requires Home Assistant 2025.7 or later** (config subentry flows).
 
 ## What it creates
 
@@ -93,6 +96,8 @@ Labeled Features**.
 | Default resolution mode | `leader` | Used when no `Mode` label or override matches. |
 | Default script call mode | `Blocking` | Forward-looking; see below. |
 | Default error mode | `log` | `silent` / `log` / `alert` / `stop`. |
+| Alert action | `script.send_alert` | Action called by the alert error tier, with `alert_severity` / `alert_title` / `alert_message` fields. |
+| Alert severity | `medium` | Severity passed to the alert action. |
 | Per-feature resolution modes | — | One per line in label syntax: `Area Night Mode: All`. |
 | Per-feature script call modes | — | One per line: `Area Sleep Timer Script Call Mode: NonBlocking`. |
 
@@ -100,6 +105,30 @@ Labeled Features**.
 `<Scoped Feature> Mode: Leader|Any|All` or `Error Mode: <tier>` label on the
 sensor entity always beats the config entry, which in turn beats the hardcoded
 fallback.
+
+## Config subentries
+
+Each of the three label kinds also has a UI equivalent, managed from the
+integration card (**Settings → Devices & Services → Labeled Features →
+⋮ → Add**). Subentries are a *fill-in*: a real label defining the same thing
+wins, and the subentry sits inert until the label is removed.
+
+| Subentry | Label equivalent | Unique by |
+|---|---|---|
+| Leader definition | `Feature Leader` + `(Area \|Floor \|)Leader: <F>` (+ `Enable:` / `Disable:` / `Increasing:` / `Decreasing:` / `Invert:` modifiers) | entity + feature + scope |
+| Provides declaration | `(Area \|Floor \|)Provides: <F>` (+ `Provides <F> Component:` modifier) | area + feature + scope |
+| Feature mode | `<Scoped F> Mode: Leader\|Any\|All` on the sensor entity | feature + scope |
+
+Notes:
+
+- A leader subentry makes its entity a leader **without** the leader label;
+  the entity is seeded into `leaders` and its triples evaluate exactly as if
+  the synthesized labels were real. New triples are not seeded into `features`
+  at reconcile — they appear on the leader's next state change (divergence #2).
+- Mode precedence is: `Mode:` label on the sensor → mode subentry → per-feature
+  override option → default resolution mode → `leader`.
+- Subentry-driven `Provides` declarations join the gated-area set, so an area
+  with no leader label can still declare features.
 
 > **Script Call Mode is a forward-looking option in Phase 1.** The YAML
 > `automation.labeled_feature_leaders` reads Script Call Mode directly from
@@ -219,10 +248,16 @@ parity comes first and cleanup later.
 ## Development
 
 ```bash
-python -m venv .venv && . .venv/bin/activate
-pip install pytest-homeassistant-custom-component
-pytest
+uv venv --python 3.13 .venv
+.venv/bin/pip install -r requirements_test.txt
+.venv/bin/pip install --no-deps pytest-homeassistant-custom-component==0.13.205
+.venv/bin/pytest -q
 ```
+
+`pytest-homeassistant-custom-component` is installed with `--no-deps` because
+its exact Home Assistant pin (2025.1.4) lags the version the suite runs
+against (2025.7.4, needed for config subentry flows). Any Python 3.13+
+toolchain works; `uv` is just the fastest way to get one.
 
 ## License
 

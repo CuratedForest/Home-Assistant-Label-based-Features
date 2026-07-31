@@ -6,8 +6,9 @@ from collections.abc import Callable
 import logging
 from typing import Any
 
-from homeassistant.config_entries import ConfigEntry
+from homeassistant.config_entries import ConfigEntry, ConfigSubentry
 from homeassistant.const import (
+    CONF_ENTITY_ID,
     EVENT_HOMEASSISTANT_STARTED,
     EVENT_STATE_CHANGED,
 )
@@ -19,11 +20,13 @@ from homeassistant.helpers.floor_registry import EVENT_FLOOR_REGISTRY_UPDATED
 from homeassistant.helpers.label_registry import EVENT_LABEL_REGISTRY_UPDATED
 from homeassistant.util import dt as dt_util
 
-from .areas import build_label_map
+from .areas import build_label_map, subentry_provides_labels
 from .const import (
     ATTR_FEATURES,
     ATTR_LEADERS,
     ATTR_SNAPSHOTS,
+    CONF_ALERT_ACTION,
+    CONF_ALERT_SEVERITY,
     CONF_DEFAULT_ERROR_MODE,
     CONF_DEFAULT_MODE,
     CONF_DEFAULT_SCRIPT_CALL_MODE,
@@ -31,6 +34,8 @@ from .const import (
     CONF_MODE_OVERRIDES,
     CONF_PREFIX,
     CONF_SCRIPT_CALL_MODE_OVERRIDES,
+    DEFAULT_ALERT_ACTION,
+    DEFAULT_ALERT_SEVERITY,
     DEFAULT_ERROR_MODE,
     DEFAULT_LEADER_LABEL,
     DEFAULT_MODE,
@@ -42,6 +47,13 @@ from .const import (
     REGISTRY_DEBOUNCE_SECONDS,
     SCOPE_AREA,
     SCOPE_FLOOR,
+    SUBCONF_AREA_ID,
+    SUBCONF_FEATURE,
+    SUBCONF_MODE,
+    SUBCONF_SCOPE,
+    SUBENTRY_TYPE_LEADER,
+    SUBENTRY_TYPE_MODE,
+    SUBENTRY_TYPE_PROVIDES,
 )
 from .errors import LabeledFeatureStop, async_handle_error, resolve_error_mode
 from .features import (
@@ -56,11 +68,13 @@ from .features import (
     evaluate_leader,
     fold,
     get_entry,
+    grouping_label_covers,
     is_skip_value,
     is_unreal,
     resolve_mode,
     seed_leader_entry,
     set_entry,
+    subentry_leader_labels,
     triple_from_key,
     valid_feature_scope,
 )
@@ -71,6 +85,7 @@ from .labels import (
     entity_label_names,
     label_areas,
     label_entities,
+    scoped_feature,
 )
 
 _LOGGER = logging.getLogger(__package__)
@@ -187,6 +202,9 @@ class LabeledFeaturesCoordinator:
         # entity_id -> (label names, area_id, floor_id)
         self._leader_meta: dict[str, tuple[list[str], str, str]] = {}
         self._triple_map: dict[str, list[str]] = {}
+        # scoped feature name -> mode, from mode subentries. Filled on each
+        # registry reconcile; read on the leader-tick path.
+        self._subentry_modes: dict[str, str] = {}
         self._registry_debouncer = Debouncer(
             hass,
             _LOGGER,
@@ -230,6 +248,16 @@ class LabeledFeaturesCoordinator:
         return str(self._option(CONF_DEFAULT_ERROR_MODE, DEFAULT_ERROR_MODE)).lower()
 
     @property
+    def alert_action(self) -> str:
+        """Return the action called by the alert error tier."""
+        return str(self._option(CONF_ALERT_ACTION, DEFAULT_ALERT_ACTION))
+
+    @property
+    def alert_severity(self) -> str:
+        """Return the severity passed to the alert error tier."""
+        return str(self._option(CONF_ALERT_SEVERITY, DEFAULT_ALERT_SEVERITY))
+
+    @property
     def mode_overrides(self) -> dict[str, str]:
         """Return parsed ``<Scoped F> Mode: <Mode>`` option overrides."""
         return parse_overrides(
@@ -257,6 +285,8 @@ class LabeledFeaturesCoordinator:
             "default_mode": self.default_mode,
             "default_script_call_mode": self.default_script_call_mode,
             "default_error_mode": self.default_error_mode,
+            "alert_action": self.alert_action,
+            "alert_severity": self.alert_severity,
             "mode_overrides": self.mode_overrides,
             "script_call_mode_overrides": self.script_call_mode_overrides,
         }
@@ -414,6 +444,22 @@ class LabeledFeaturesCoordinator:
 
     # ── registry reconcile ───────────────────────────────────────────────────
 
+    def _subentries_by_type(
+        self,
+    ) -> tuple[list[ConfigSubentry], list[ConfigSubentry], list[ConfigSubentry]]:
+        """Split the entry's subentries into (leader, provides, mode) lists."""
+        leaders: list[ConfigSubentry] = []
+        provides: list[ConfigSubentry] = []
+        modes: list[ConfigSubentry] = []
+        for sub in self.entry.subentries.values():
+            if sub.subentry_type == SUBENTRY_TYPE_LEADER:
+                leaders.append(sub)
+            elif sub.subentry_type == SUBENTRY_TYPE_PROVIDES:
+                provides.append(sub)
+            elif sub.subentry_type == SUBENTRY_TYPE_MODE:
+                modes.append(sub)
+        return leaders, provides, modes
+
     async def _async_refresh_registry(self) -> None:
         """Rebuild ``label_map`` and reconcile the leader/triple sets.
 
@@ -425,17 +471,53 @@ class LabeledFeaturesCoordinator:
         state change, exactly as with the legacy template sensor.
         Also refreshes every registry-derived cache (leader ids, gated area
         ids, per-leader label/area/floor metadata and the triple map) so no
-        other code path has to touch a registry.
+        other code path has to touch a registry. Subentries are folded into
+        the same caches here as synthesized labels, with real labels winning
+        on conflict.
         """
         try:
             regs = Registries.async_get(self.hass)
             leader_label = self.leader_label
 
-            self.label_map = build_label_map(regs, leader_label)
+            leader_subs, provides_subs, mode_subs = self._subentries_by_type()
 
-            leader_ids = label_entities(regs, leader_label)
-            self._leader_ids = set(leader_ids)
-            self._gated_area_ids = set(label_areas(regs, leader_label))
+            # Mode subentries fill the tier between sensor labels and option
+            # overrides in `resolve_mode`.
+            self._subentry_modes = {}
+            for sub in mode_subs:
+                feature = str(sub.data.get(SUBCONF_FEATURE, "")).strip()
+                if not feature:
+                    continue
+                scope = str(sub.data.get(SUBCONF_SCOPE, SCOPE_AREA))
+                mode = str(sub.data.get(SUBCONF_MODE, MODE_LEADER))
+                self._subentry_modes[scoped_feature(scope, feature)] = mode
+
+            # Provides subentries synthesize area labels; their areas join the
+            # gated set so subentry-only areas are scanned at all.
+            extra_area_labels: dict[str, list[str]] = {}
+            extra_gated: list[str] = []
+            for sub in provides_subs:
+                area_id = str(sub.data.get(SUBCONF_AREA_ID, ""))
+                if not area_id:
+                    continue
+                if (synth := subentry_provides_labels(sub.data)) is None:
+                    await self._async_error(
+                        f"provides subentry {sub.title!r} has an unusable"
+                        " feature or scope"
+                    )
+                    continue
+                extra_area_labels.setdefault(area_id, []).extend(synth)
+                if area_id not in extra_gated:
+                    extra_gated.append(area_id)
+
+            self.label_map = build_label_map(
+                regs, leader_label, extra_area_labels, extra_gated
+            )
+
+            leader_ids = list(label_entities(regs, leader_label))
+            self._gated_area_ids = set(label_areas(regs, leader_label)) | set(
+                extra_gated
+            )
             self._leader_meta = {
                 entity_id: (
                     entity_label_names(regs, entity_id),
@@ -444,6 +526,35 @@ class LabeledFeaturesCoordinator:
                 )
                 for entity_id in leader_ids
             }
+
+            # Leader subentries synthesize grouping + modifier labels. A real
+            # label defining the same (feature, scope) wins; the subentry then
+            # stays inert until the label is removed.
+            for sub in leader_subs:
+                entity_id = str(sub.data.get(CONF_ENTITY_ID, ""))
+                if not entity_id:
+                    continue
+                area_id = entity_area_id(regs, entity_id)
+                floor_id = entity_floor_id(regs, entity_id)
+                if (
+                    synth := subentry_leader_labels(sub.data, area_id, floor_id)
+                ) is None:
+                    await self._async_error(
+                        f"leader subentry {sub.title!r} cannot resolve its scope"
+                    )
+                    continue
+                feature = str(sub.data.get(SUBCONF_FEATURE, "")).strip()
+                scope = str(sub.data.get(SUBCONF_SCOPE, SCOPE_AREA))
+                if entity_id in self._leader_meta:
+                    labels, area, floor = self._leader_meta[entity_id]
+                    if grouping_label_covers(labels, feature, scope):
+                        continue
+                    self._leader_meta[entity_id] = ([*labels, *synth], area, floor)
+                else:
+                    self._leader_meta[entity_id] = (synth, area_id, floor_id)
+                    leader_ids.append(entity_id)
+
+            self._leader_ids = set(leader_ids)
             self._triple_map = build_triple_map(
                 [self._leader_info(entity_id) for entity_id in leader_ids]
             )
@@ -587,7 +698,13 @@ class LabeledFeaturesCoordinator:
                     if entity_id not in mapped_leaders:
                         continue
                     triple = triple_from_key(key)
-                    mode = resolve_mode(triple, sensor_labels, overrides, default_mode)
+                    mode = resolve_mode(
+                        triple,
+                        sensor_labels,
+                        self._subentry_modes,
+                        overrides,
+                        default_mode,
+                    )
                     this_truth = evaluate_leader(leader, triple)
                     if mode == MODE_LEADER:
                         enabled = this_truth
@@ -726,7 +843,14 @@ class LabeledFeaturesCoordinator:
         """Report an internal error through the resolved error tier."""
         mode = resolve_error_mode(self._sensor_labels(), self.default_error_mode)
         try:
-            await async_handle_error(self.hass, mode, message, source=ERROR_SOURCE)
+            await async_handle_error(
+                self.hass,
+                mode,
+                message,
+                source=ERROR_SOURCE,
+                severity=self.alert_severity,
+                alert_action=self.alert_action,
+            )
         except LabeledFeatureStop:
             # `stop` halts the unit of work; the caller has already returned.
             _LOGGER.debug("stop tier raised for: %s", message)

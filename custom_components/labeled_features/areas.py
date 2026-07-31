@@ -9,6 +9,7 @@ pools, or any other per-feature knob — those all resolve at dispatch time in
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Mapping
 import re
 from typing import Any
 
@@ -16,9 +17,13 @@ from .const import (
     DEFAULT_AREA_COMPONENT,
     LABEL_MAP_KEY_SEPARATOR,
     PROVIDES_MODIFIER_KEYWORDS,
+    PROVIDES_SCOPES,
     SCOPE_AREA,
     SCOPE_FLOOR,
     SCOPE_NONE,
+    SUBCONF_COMPONENT,
+    SUBCONF_FEATURE,
+    SUBCONF_SCOPE,
 )
 from .labels import (
     Registries,
@@ -29,6 +34,9 @@ from .labels import (
 )
 
 _MODIFIER_RE = re.compile(r"^[^:]+ (" + "|".join(PROVIDES_MODIFIER_KEYWORDS) + r"): ")
+
+# Scope value -> raw `(Area |Floor |)` prefix used by Provides labels.
+_SCOPE_TO_RAW_PREFIX = {SCOPE_AREA: "Area", SCOPE_FLOOR: "Floor", SCOPE_NONE: ""}
 
 
 def is_modifier_label_value(feature: str) -> bool:
@@ -54,7 +62,52 @@ def _component_for(
     return DEFAULT_AREA_COMPONENT
 
 
-def build_label_map(regs: Registries, leader_label: str) -> dict[str, Any]:
+def provides_label_covers(area_labels: list[str], feature: str, prefix: str) -> bool:
+    """Return True when the area's labels already declare ``(feature, prefix)``.
+
+    Used to keep provides subentries a fill-in only: when a real
+    ``(Area |Floor |)Provides: <F>`` label covers the same declaration, the
+    label wins and the subentry is ignored.
+    """
+    for label in area_labels:
+        parsed = parse_provides_label(label)
+        if parsed is None:
+            continue
+        label_prefix, label_feature = parsed
+        if is_modifier_label_value(label_feature):
+            continue
+        if (label_prefix, label_feature) == (prefix, feature):
+            return True
+    return False
+
+
+def subentry_provides_labels(data: Mapping[str, Any]) -> list[str] | None:
+    """Convert a provides subentry into synthetic area labels.
+
+    Returns the declaration plus an optional ``Component:`` companion label,
+    or None when the feature or scope is unusable. A floor scope on an area
+    with no floor is dropped later at map-build time, exactly like a real
+    ``Floor Provides:`` label on such an area.
+    """
+    feature = str(data.get(SUBCONF_FEATURE, "")).strip()
+    scope = str(data.get(SUBCONF_SCOPE, SCOPE_AREA))
+    if not feature or scope not in PROVIDES_SCOPES:
+        return None
+    prefix = _SCOPE_TO_RAW_PREFIX[scope]
+    scope_label_prefix = f"{prefix} " if prefix else ""
+    labels = [f"{scope_label_prefix}Provides: {feature}"]
+    component = str(data.get(SUBCONF_COMPONENT, "") or "").strip()
+    if component and component != DEFAULT_AREA_COMPONENT:
+        labels.append(f"{scope_label_prefix}Provides {feature} Component: {component}")
+    return labels
+
+
+def build_label_map(
+    regs: Registries,
+    leader_label: str,
+    extra_area_labels: Mapping[str, list[str]] | None = None,
+    extra_gated_area_ids: Iterable[str] = (),
+) -> dict[str, Any]:
     """Build the ``label_map`` attribute.
 
     Keys are ``<scope_id>||<label>``; values carry the five fields the Areas
@@ -69,12 +122,44 @@ def build_label_map(regs: Registries, leader_label: str) -> dict[str, Any]:
 
     Floor-scoped declarations on several areas of one floor deduplicate by
     ``(scope_id, label)``; the first declaration wins.
+
+    ``extra_area_labels`` carries synthetic declarations from provides
+    subentries, keyed by declaring area id. They are parsed by the same code
+    path as real labels, but only fill in what the area's real labels do not
+    already declare — labels win on conflict. ``extra_gated_area_ids`` joins
+    the label-gated area set so subentry-only areas are scanned at all.
     """
     result: dict[str, Any] = {}
+    extra_area_labels = extra_area_labels or {}
 
-    for area_id in label_areas(regs, leader_label):
+    gated_area_ids = list(label_areas(regs, leader_label))
+    for area_id in extra_gated_area_ids:
+        if area_id not in gated_area_ids:
+            gated_area_ids.append(area_id)
+
+    for area_id in gated_area_ids:
         floor_id = area_floor_id(regs, area_id)
-        area_labels = area_label_names(regs, area_id)
+        real_labels = area_label_names(regs, area_id)
+        area_labels = list(real_labels)
+
+        extras = extra_area_labels.get(area_id, ())
+        for label in extras:
+            parsed = parse_provides_label(label)
+            if parsed is None:
+                # Companion modifier labels are pulled in with their
+                # declaration below.
+                continue
+            prefix, feature = parsed
+            if is_modifier_label_value(feature):
+                continue
+            if provides_label_covers(real_labels, feature, prefix):
+                continue
+            scope_label_prefix = f"{prefix} " if prefix else ""
+            companion_prefix = f"{scope_label_prefix}Provides {feature} "
+            area_labels.append(label)
+            area_labels.extend(
+                mod for mod in extras if mod.startswith(companion_prefix)
+            )
 
         for label in area_labels:
             parsed = parse_provides_label(label)

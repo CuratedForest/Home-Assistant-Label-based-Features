@@ -15,6 +15,8 @@ CONF_DEFAULT_SCRIPT_CALL_MODE: Final = "default_script_call_mode"
 CONF_DEFAULT_ERROR_MODE: Final = "default_error_mode"
 CONF_MODE_OVERRIDES: Final = "mode_overrides"
 CONF_SCRIPT_CALL_MODE_OVERRIDES: Final = "script_call_mode_overrides"
+CONF_ALERT_ACTION: Final = "alert_action"
+CONF_ALERT_SEVERITY: Final = "alert_severity"
 
 DEFAULT_NAME: Final = "Labeled Features"
 DEFAULT_PREFIX: Final = "labeled_feature"
@@ -56,6 +58,8 @@ DEFAULT_ERROR_SEVERITY: Final = "medium"
 ERROR_SEVERITIES: Final = ("low", "medium", "high")
 
 ALERT_SCRIPT_ENTITY_ID: Final = "script.send_alert"
+DEFAULT_ALERT_ACTION: Final = ALERT_SCRIPT_ENTITY_ID
+DEFAULT_ALERT_SEVERITY: Final = DEFAULT_ERROR_SEVERITY
 
 # ── Scopes ───────────────────────────────────────────────────────────────────
 SCOPE_AREA: Final = "area"
@@ -76,6 +80,50 @@ SCOPE_LABEL_PREFIX: Final = {
     SCOPE_GLOBAL: "",
     SCOPE_NONE: "",
 }
+
+# ── Config subentries ────────────────────────────────────────────────────────
+# UI-driven alternative to authoring labels. Labels win on conflict: a
+# subentry only fills in what no label declares for the same thing.
+SUBENTRY_TYPE_LEADER: Final = "leader"
+SUBENTRY_TYPE_PROVIDES: Final = "provides"
+SUBENTRY_TYPE_MODE: Final = "mode"
+
+SUBCONF_AREA_ID: Final = "area_id"
+SUBCONF_FEATURE: Final = "feature"
+SUBCONF_SCOPE: Final = "scope"
+SUBCONF_ENABLE_VALUE: Final = "enable_value"
+SUBCONF_DISABLE_VALUE: Final = "disable_value"
+SUBCONF_DIRECTION: Final = "direction"
+SUBCONF_INVERT: Final = "invert"
+SUBCONF_MODE: Final = "mode"
+SUBCONF_COMPONENT: Final = "component"
+
+# Subentry scope vocabularies: leader uses the features sensor's `global`,
+# provides uses the areas sensor's `none` for the bare (unprefixed) form.
+LEADER_SCOPES: Final = (SCOPE_AREA, SCOPE_FLOOR, SCOPE_GLOBAL)
+PROVIDES_SCOPES: Final = (SCOPE_AREA, SCOPE_FLOOR, SCOPE_NONE)
+
+DIRECTION_NONE: Final = "none"
+DIRECTION_INCREASING: Final = "increasing"
+DIRECTION_DECREASING: Final = "decreasing"
+DIRECTION_BOTH: Final = "both"
+DIRECTIONS: Final = (
+    DIRECTION_NONE,
+    DIRECTION_INCREASING,
+    DIRECTION_DECREASING,
+    DIRECTION_BOTH,
+)
+
+# Components a provides subentry can hint, mirroring the MQTT-discovery set
+# `script.labeled_feature_entities` supports.
+PROVIDES_COMPONENTS: Final = (
+    "select",
+    "number",
+    "sensor",
+    "switch",
+    "text",
+    "binary_sensor",
+)
 
 # ── Truth function ──────────────────────────────────────────────────────────
 # Generic truthy states for boolean-ish leaders. Compared case-insensitively.

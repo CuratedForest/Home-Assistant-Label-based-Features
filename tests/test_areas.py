@@ -5,6 +5,8 @@ from __future__ import annotations
 from custom_components.labeled_features.areas import (
     build_label_map,
     is_modifier_label_value,
+    provides_label_covers,
+    subentry_provides_labels,
 )
 from custom_components.labeled_features.const import DEFAULT_LEADER_LABEL
 from custom_components.labeled_features.labels import Registries
@@ -158,3 +160,108 @@ def test_is_modifier_label_value() -> None:
     assert is_modifier_label_value("Audio Mode Device Class: pressure")
     assert not is_modifier_label_value("Audio Mode")
     assert not is_modifier_label_value("Shoot Zone")
+
+
+# ── provides subentries ──────────────────────────────────────────────────────
+
+
+def test_subentry_provides_labels_component_companion() -> None:
+    """A non-select component adds a Component companion label."""
+    assert subentry_provides_labels(
+        {"feature": "Audio Mode", "scope": "area", "component": "number"}
+    ) == ["Area Provides: Audio Mode", "Area Provides Audio Mode Component: number"]
+
+
+def test_subentry_provides_labels_scope_forms() -> None:
+    """Floor and none scopes map to the matching label forms."""
+    assert subentry_provides_labels({"feature": "Audio Mode", "scope": "floor"}) == [
+        "Floor Provides: Audio Mode"
+    ]
+    assert subentry_provides_labels({"feature": "Shoot Zone", "scope": "none"}) == [
+        "Provides: Shoot Zone"
+    ]
+    assert subentry_provides_labels({"feature": " ", "scope": "area"}) is None
+    assert subentry_provides_labels({"feature": "X", "scope": "global"}) is None
+
+
+def test_provides_label_covers_matches_feature_and_prefix() -> None:
+    """Coverage ignores modifier labels and requires the same prefix."""
+    labels = ["Area Provides: Audio Mode", "Area Provides Audio Mode Min: 0"]
+    assert provides_label_covers(labels, "Audio Mode", "Area") is True
+    assert provides_label_covers(labels, "Audio Mode", "") is False
+    assert provides_label_covers(labels, "Audio Mode Min", "Area") is False
+
+
+async def test_subentry_declaration_in_label_map(hass: HomeAssistant) -> None:
+    """A provides subentry lands in label_map without any labels."""
+    area = create_area(hass, "Kitchen")
+    result = build_label_map(
+        Registries.async_get(hass),
+        DEFAULT_LEADER_LABEL,
+        {area.id: ["Area Provides: Audio Mode"]},
+        [area.id],
+    )
+    entry = result[f"{area.id}||Audio Mode"]
+    assert entry["scope"] == "area"
+    assert entry["component"] == "select"
+    assert entry["declaring_area_id"] == area.id
+
+
+async def test_subentry_component_hint_in_label_map(hass: HomeAssistant) -> None:
+    """The synthetic Component companion overrides the component hint."""
+    area = create_area(hass, "Root Area")
+    result = build_label_map(
+        Registries.async_get(hass),
+        DEFAULT_LEADER_LABEL,
+        {
+            area.id: [
+                "Area Provides: Tracked PSI",
+                "Area Provides Tracked PSI Component: number",
+            ]
+        },
+        [area.id],
+    )
+    assert result[f"{area.id}||Tracked PSI"]["component"] == "number"
+
+
+async def test_subentry_declaration_loses_to_label(hass: HomeAssistant) -> None:
+    """A real Provides label wins over a conflicting subentry declaration."""
+    area = create_area(
+        hass,
+        "Kitchen",
+        labels=[DEFAULT_LEADER_LABEL, "Area Provides: Audio Mode"],
+    )
+    result = build_label_map(
+        Registries.async_get(hass),
+        DEFAULT_LEADER_LABEL,
+        {
+            area.id: [
+                "Area Provides: Audio Mode",
+                "Area Provides Audio Mode Component: number",
+            ]
+        },
+        [area.id],
+    )
+    # One entry, from the label; the subentry's component hint is not applied.
+    assert set(result) == {f"{area.id}||Audio Mode"}
+    assert result[f"{area.id}||Audio Mode"]["component"] == "select"
+
+
+async def test_subentry_floor_scope_dedupes_with_labels(hass: HomeAssistant) -> None:
+    """Floor-scoped subentries dedupe by (scope_id, label) like labels do."""
+    floor = create_floor(hass, "First Floor")
+    kitchen = create_area(hass, "Kitchen", floor_id=floor.floor_id)
+    dining = create_area(
+        hass,
+        "Dining Room",
+        labels=[DEFAULT_LEADER_LABEL, "Floor Provides: Audio Mode"],
+        floor_id=floor.floor_id,
+    )
+    result = build_label_map(
+        Registries.async_get(hass),
+        DEFAULT_LEADER_LABEL,
+        {kitchen.id: ["Floor Provides: Audio Mode"]},
+        [kitchen.id],
+    )
+    assert set(result) == {f"{floor.floor_id}||Audio Mode"}
+    assert result[f"{floor.floor_id}||Audio Mode"]["declaring_area_id"] == dining.id

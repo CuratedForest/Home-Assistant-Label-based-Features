@@ -20,6 +20,10 @@ from .const import (
     ATTR_MODE,
     ATTR_PREVIOUS_VALUE,
     ATTR_TRIGGERING_LEADER,
+    DIRECTION_BOTH,
+    DIRECTION_DECREASING,
+    DIRECTION_INCREASING,
+    DIRECTION_NONE,
     FIRE_ALWAYS_DOMAINS,
     MODE_ALL,
     MODE_ANY,
@@ -27,7 +31,14 @@ from .const import (
     SCOPE_AREA,
     SCOPE_FLOOR,
     SCOPE_GLOBAL,
+    SCOPE_LABEL_PREFIX,
     SKIP_EVENT_SUFFIX,
+    SUBCONF_DIRECTION,
+    SUBCONF_DISABLE_VALUE,
+    SUBCONF_ENABLE_VALUE,
+    SUBCONF_FEATURE,
+    SUBCONF_INVERT,
+    SUBCONF_SCOPE,
     TRUTHY_STATES,
     UNREAL_STATES,
 )
@@ -273,20 +284,78 @@ def triple_from_key(key: str) -> Triple:
     return Triple(feature, scope, scope_id)
 
 
+# ── leader subentries ────────────────────────────────────────────────────────
+
+
+def grouping_label_covers(labels: list[str], feature: str, scope: str) -> bool:
+    """Return True when the labels already define a Leader grouping.
+
+    Used to keep leader subentries a fill-in only: when a real
+    ``(Area |Floor |)Leader: <F>`` label covers the same ``(feature, scope)``,
+    the label wins and the subentry is ignored.
+    """
+    for label in labels:
+        parsed = parse_grouping_label(label, "Leader")
+        if parsed is not None and parsed == (scope, feature):
+            return True
+    return False
+
+
+def subentry_leader_labels(
+    data: dict[str, Any], area_id: str, floor_id: str
+) -> list[str] | None:
+    """Convert a leader subentry into synthetic grouping + modifier labels.
+
+    The synthesized labels feed the exact same parsing pipeline as real
+    labels, so truth evaluation needs no subentry awareness. Returns None
+    when the feature is empty or the requested scope cannot be resolved
+    (``area`` scope with no area, ``floor`` scope with no floor).
+    """
+    feature = str(data.get(SUBCONF_FEATURE, "")).strip()
+    scope = str(data.get(SUBCONF_SCOPE, SCOPE_AREA))
+    if not feature:
+        return None
+    if scope == SCOPE_AREA and not area_id:
+        return None
+    if scope == SCOPE_FLOOR and not floor_id:
+        return None
+
+    prefix = SCOPE_LABEL_PREFIX.get(scope, "")
+    labels = [f"{prefix}Leader: {feature}"]
+    scoped = f"{prefix}{feature}"
+
+    enable = str(data.get(SUBCONF_ENABLE_VALUE, "") or "")
+    if enable:
+        labels.append(f"{scoped} Enable: {enable}")
+    disable = str(data.get(SUBCONF_DISABLE_VALUE, "") or "")
+    if disable:
+        labels.append(f"{scoped} Disable: {disable}")
+    direction = str(data.get(SUBCONF_DIRECTION, DIRECTION_NONE))
+    if direction in (DIRECTION_INCREASING, DIRECTION_BOTH):
+        labels.append(f"{scoped} Increasing: True")
+    if direction in (DIRECTION_DECREASING, DIRECTION_BOTH):
+        labels.append(f"{scoped} Decreasing: True")
+    if data.get(SUBCONF_INVERT):
+        labels.append(f"{scoped} Invert: True")
+    return labels
+
+
 # ── mode resolution ──────────────────────────────────────────────────────────
 
 
 def resolve_mode(
     triple: Triple,
     sensor_labels: list[str],
+    subentry_modes: dict[str, str],
     option_overrides: dict[str, str],
     default_mode: str,
 ) -> str:
     """Resolve the resolution mode for a triple.
 
     Precedence: a ``<Scoped F> Mode: Leader|Any|All`` label on the sensor
-    entity, then the parsed config-entry override for the same scoped feature,
-    then the entry's default mode, then ``leader``.
+    entity, then a mode subentry for the same scoped feature, then the
+    parsed config-entry override, then the entry's default mode, then
+    ``leader``.
     """
     key = f"{triple.label_prefix} Mode: "
     for label in sensor_labels:
@@ -294,6 +363,8 @@ def resolve_mode(
             value = label[len(key) :]
             if value in ("Leader", "Any", "All"):
                 return value.lower()
+    if (subentry_mode := subentry_modes.get(triple.label_prefix)) is not None:
+        return subentry_mode
     if (override := option_overrides.get(triple.label_prefix)) is not None:
         return override
     return default_mode or MODE_LEADER

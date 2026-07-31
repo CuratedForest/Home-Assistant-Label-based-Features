@@ -7,7 +7,8 @@ Tier         Behavior
 ===========  ==========================================================
 ``silent``   No-op.
 ``log``      Log a warning ``"{source}: {message}"``.
-``alert``    Call ``script.send_alert`` when it exists, else log a warning.
+``alert``    Call the configured alert action (default
+             ``script.send_alert``) when it exists, else log a warning.
 ``stop``     Log an error and raise :class:`LabeledFeatureStop` so the
              caller can abort that unit of work.
 ===========  ==========================================================
@@ -89,10 +90,15 @@ async def async_handle_error(
     message: str,
     source: str = DEFAULT_ERROR_SOURCE,
     severity: str = DEFAULT_ERROR_SEVERITY,
+    *,
+    alert_action: str | None = None,
 ) -> None:
     """Dispatch an error through the requested tier.
 
-    Raises :class:`LabeledFeatureStop` for the ``stop`` tier.
+    ``alert_action`` overrides the default ``script.send_alert`` target for
+    the alert tier; it must be a ``domain.service`` string. A malformed or
+    unregistered action degrades to a log warning — the error path must never
+    raise. Raises :class:`LabeledFeatureStop` for the ``stop`` tier.
     """
     mode = normalize_error_mode(error_mode)
     text = f"{source}: {message}"
@@ -105,23 +111,28 @@ async def async_handle_error(
         return
 
     if mode == ERROR_MODE_ALERT:
-        if hass.states.get(ALERT_SCRIPT_ENTITY_ID) is not None:
-            await hass.services.async_call(
-                "script",
-                ALERT_SCRIPT_ENTITY_ID.split(".", 1)[1],
-                {
-                    "alert_severity": severity,
-                    "alert_title": source,
-                    "alert_message": message,
-                },
-                blocking=False,
-            )
-        else:
+        target = alert_action or ALERT_SCRIPT_ENTITY_ID
+        domain, _, service = target.partition(".")
+        if not service:
             _LOGGER.warning(
-                "%s (alert tier requested but %s does not exist)",
-                text,
-                ALERT_SCRIPT_ENTITY_ID,
+                "%s (alert tier requested but %s is not a valid action)", text, target
             )
+            return
+        if not hass.services.has_service(domain, service):
+            _LOGGER.warning(
+                "%s (alert tier requested but %s does not exist)", text, target
+            )
+            return
+        await hass.services.async_call(
+            domain,
+            service,
+            {
+                "alert_severity": severity,
+                "alert_title": source,
+                "alert_message": message,
+            },
+            blocking=False,
+        )
         return
 
     if mode == ERROR_MODE_STOP:

@@ -59,6 +59,48 @@ async def test_alert_tier_falls_back_to_logging(
     assert "script.send_alert does not exist" in caplog.text
 
 
+async def test_alert_tier_uses_configured_action(hass: HomeAssistant) -> None:
+    """The alert tier can call an action other than script.send_alert."""
+    calls = async_mock_service(hass, "notify", "mobile_app_phone")
+
+    await async_handle_error(
+        hass,
+        "alert",
+        "boom",
+        source="Src",
+        severity="low",
+        alert_action="notify.mobile_app_phone",
+    )
+    await hass.async_block_till_done()
+
+    assert len(calls) == 1
+    assert calls[0].data == {
+        "alert_severity": "low",
+        "alert_title": "Src",
+        "alert_message": "boom",
+    }
+
+
+async def test_alert_tier_malformed_action_falls_back(
+    hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A malformed alert action degrades to a warning, never a raise."""
+    await async_handle_error(hass, "alert", "boom", source="Src", alert_action="bogus")
+    assert "Src: boom" in caplog.text
+    assert "not a valid action" in caplog.text
+
+
+async def test_alert_tier_unregistered_action_falls_back(
+    hass: HomeAssistant, caplog: pytest.LogCaptureFixture
+) -> None:
+    """An unregistered alert action degrades to a warning."""
+    await async_handle_error(
+        hass, "alert", "boom", source="Src", alert_action="notify.nothing_here"
+    )
+    assert "Src: boom" in caplog.text
+    assert "notify.nothing_here does not exist" in caplog.text
+
+
 async def test_stop_tier_raises_and_logs(
     hass: HomeAssistant, caplog: pytest.LogCaptureFixture
 ) -> None:

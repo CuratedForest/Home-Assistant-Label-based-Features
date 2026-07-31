@@ -1,7 +1,3 @@
-<!-- FOR AI AGENTS - Human readability is a side effect, not a goal -->
-<!-- Managed by agent: keep sections and order; edit content, not structure -->
-<!-- Last updated: 2026-07-25 | Last verified: 2026-07-25 -->
-
 # AGENTS.md
 
 **Precedence:** the **closest `AGENTS.md`** to the files you're changing wins. Root holds global defaults only.
@@ -11,18 +7,21 @@ Label Based Features system. It replaces two production trigger-based template s
 native entities. **Parity with those sensors is the hard requirement** — the consuming
 automations and scripts are unchanged YAML and must keep working.
 
-## Commands (verified 2026-07-25)
+## Commands 
 > Source: `requirements_test.txt`, `pytest.ini`, `ruff.toml`. No Makefile, no `pyproject.toml`.
 
 | Task | Command | ~Time |
 |------|---------|-------|
-| Setup | `python -m venv .venv && . .venv/bin/activate && pip install -r requirements_test.txt` | ~2m |
+| Setup | `uv venv --python 3.13 .venv && .venv/bin/pip install -r requirements_test.txt && .venv/bin/pip install --no-deps pytest-homeassistant-custom-component==0.13.205` | ~2m |
 | Lint | `ruff check custom_components tests` | <1s |
 | Format | `black --line-length 88 custom_components tests` | <1s |
 | Test (single file) | `pytest tests/test_features.py -q` | ~2s |
-| Test (all) | `pytest -q` | ~4s (142 cases) |
+| Test (all) | `pytest -q` | ~4s (174 cases) |
 | Build | none — this is a HACS/custom_components drop-in | — |
 
+> The suite runs against Home Assistant 2025.7.4 (config subentry flows) on
+> Python 3.13. PHCC is installed separately with `--no-deps` because its exact
+> HA pin (2025.1.4) lags; see `requirements_test.txt`.
 > Validation of `manifest.json`/`hacs.json` runs in CI only (hassfest + HACS action,
 > `.github/workflows/validate.yaml`). There is no local equivalent.
 
@@ -63,6 +62,7 @@ pytest.ini, ruff.toml, requirements_test.txt -> tool config (no pyproject.toml)
 | Report an error through the tiers | `async_handle_error`, `resolve_error_mode` | `errors.py` |
 | Pick the instance for an untargeted event | `async_event_owner` | `routing.py` |
 | Parse `<Scoped F> <Keyword>: <value>` overrides | `parse_overrides`, `validate_overrides` | `coordinator.py` |
+| Subentry → synthetic labels | `subentry_leader_labels`, `grouping_label_covers` / `subentry_provides_labels`, `provides_label_covers` | `features.py` / `areas.py` |
 | Label/scope constants, feature catalog | `SCOPE_LABEL_PREFIX`, `TRUTHY_STATES`, `FEATURE_META` | `const.py` |
 
 ## Heuristics (quick decisions)
@@ -78,7 +78,8 @@ pytest.ini, ruff.toml, requirements_test.txt -> tool config (no pyproject.toml)
 
 ## Key Decisions
 - **Parity over cleanup (Phase 1).** Legacy quirks are reproduced deliberately and documented in README `KNOWN_DIVERGENCES`. Do not "fix" one without being asked.
-- **Labels stay the configuration surface.** Leaders, features and followers are label-driven; the config flow only carries instance-level settings, and **labels on the sensor entities win over config-entry options**.
+- **Labels stay the configuration surface.** Leaders, features and followers are label-driven; the config flow only carries instance-level settings, and **labels on the sensor entities win over config-entry options and over subentries**.
+- **Subentries are a fill-in, never an override (2026-07-26).** Leader/provides/mode subentries synthesize labels at the registry reconcile; a real label defining the same thing wins and the subentry sits inert until the label is removed. Mode precedence: sensor label > mode subentry > option override > entry default > `leader`.
 - **Entity slug prefix is fixed at setup.** Default `labeled_feature` reproduces the legacy entity IDs; changing it would orphan entity IDs, so it is absent from the options flow.
 - **One instance consumes each untargeted compat event.** Ambiguity is dropped with a warning rather than guessed (`routing.py`).
 - **Phase 1 is the state layer only.** The Leaders/Areas automations and every `labeled_feature_*` script stay in YAML.
@@ -110,10 +111,11 @@ pytest.ini, ruff.toml, requirements_test.txt -> tool config (no pyproject.toml)
 - Force-push without `--force-with-lease`
 
 ## Codebase State
-- **Phase 1 complete**: both sensors, error tiers, config/options flow, actions, routing, diagnostics. 142 tests.
+- **Phase 1 complete**: both sensors, error tiers, config/options flow, subentries, actions, routing, diagnostics. 174 tests.
 - **Not yet cut over**: the template sensors still own the legacy entity IDs in production. README has the migration order; creating a default-prefix instance before deleting them yields `_2` entity IDs.
 - **Known divergences** (intentional, see README): Enable/Disable compares entity *state* not `current_value`; new triples are not seeded on a label edit; `leaders` seeding happens on the debounced reconcile.
 - **Forward-looking option**: `default_script_call_mode` is stored and exposed but unused in Phase 1 — the YAML Leaders automation still reads Script Call Mode from labels.
+- **Test env floor is HA 2025.7.4 on Python 3.13** (2026-07-26): config subentry flows. PHCC is pinned separately with `--no-deps`; `tests/conftest.py` carries a `ConfigEntry.__init__` shim for PHCC's missing `subentries_data` kwarg.
 - Local reference material, **not in this repo**: legacy YAML at `/home/coder/HomeAssistant/{configuration,automations,scripts}.yaml`; specification docs at `/home/coder/CuratedForest.com/content/tech/home-assistant/label-based-features/`.
 
 ## Terminology

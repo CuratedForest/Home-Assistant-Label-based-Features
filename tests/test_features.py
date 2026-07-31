@@ -15,9 +15,11 @@ from custom_components.labeled_features.features import (
     current_value_for,
     evaluate_leader,
     fold,
+    grouping_label_covers,
     is_skip_value,
     resolve_mode,
     seed_leader_entry,
+    subentry_leader_labels,
     triple_from_key,
 )
 
@@ -345,24 +347,86 @@ def test_triple_key_round_trip() -> None:
 
 
 def test_resolve_mode_precedence() -> None:
-    """Sensor labels beat option overrides, which beat the entry default."""
+    """Sensor labels beat subentries, which beat overrides, then the default."""
     triple = Triple("Night", "floor", "first_floor")
     assert (
         resolve_mode(
-            triple, ["Floor Night Mode: All"], {"Floor Night": "any"}, "leader"
+            triple,
+            ["Floor Night Mode: All"],
+            {"Floor Night": "leader"},
+            {"Floor Night": "any"},
+            "leader",
         )
         == "all"
     )
-    assert resolve_mode(triple, [], {"Floor Night": "any"}, "leader") == "any"
-    assert resolve_mode(triple, [], {}, "all") == "all"
-    assert resolve_mode(triple, [], {}, "") == "leader"
+    assert (
+        resolve_mode(
+            triple, [], {"Floor Night": "leader"}, {"Floor Night": "any"}, "leader"
+        )
+        == "leader"
+    )
+    assert resolve_mode(triple, [], {}, {"Floor Night": "any"}, "leader") == "any"
+    assert resolve_mode(triple, [], {}, {}, "all") == "all"
+    assert resolve_mode(triple, [], {}, {}, "") == "leader"
 
 
 def test_resolve_mode_ignores_wrong_scope_and_bad_values() -> None:
     """Scope prefix and mode spelling are both significant."""
     triple = Triple("Night", "floor", "first_floor")
-    assert resolve_mode(triple, ["Area Night Mode: All"], {}, "leader") == "leader"
-    assert resolve_mode(triple, ["Floor Night Mode: all"], {}, "leader") == "leader"
+    assert resolve_mode(triple, ["Area Night Mode: All"], {}, {}, "leader") == "leader"
+    assert resolve_mode(triple, ["Floor Night Mode: all"], {}, {}, "leader") == "leader"
+
+
+# ── leader subentries ────────────────────────────────────────────────────────
+
+
+def test_grouping_label_covers_matches_feature_and_scope() -> None:
+    """Coverage is per (feature, scope), not just the feature name."""
+    labels = ["Area Leader: Night", "Leader: Day"]
+    assert grouping_label_covers(labels, "Night", "area") is True
+    assert grouping_label_covers(labels, "Night", "global") is False
+    assert grouping_label_covers(labels, "Day", "global") is True
+    assert grouping_label_covers(labels, "Other", "area") is False
+
+
+def test_subentry_leader_labels_full_modifiers() -> None:
+    """A leader subentry synthesizes the equivalent label set."""
+    data = {
+        "feature": "Night",
+        "scope": "area",
+        "enable_value": "on",
+        "disable_value": "off",
+        "direction": "both",
+        "invert": True,
+    }
+    assert subentry_leader_labels(data, "kitchen", "first_floor") == [
+        "Area Leader: Night",
+        "Area Night Enable: on",
+        "Area Night Disable: off",
+        "Area Night Increasing: True",
+        "Area Night Decreasing: True",
+        "Area Night Invert: True",
+    ]
+
+
+def test_subentry_leader_labels_scope_prefixes() -> None:
+    """Floor and global scopes map to the matching label prefixes."""
+    assert subentry_leader_labels(
+        {"feature": "Night", "scope": "floor"}, "kitchen", "first_floor"
+    ) == ["Floor Leader: Night"]
+    assert subentry_leader_labels({"feature": "Night", "scope": "global"}, "", "") == [
+        "Leader: Night"
+    ]
+
+
+def test_subentry_leader_labels_unresolvable_scope() -> None:
+    """An area/floor scope without an area/floor yields no labels."""
+    assert subentry_leader_labels({"feature": "Night", "scope": "area"}, "", "") is None
+    assert (
+        subentry_leader_labels({"feature": "Night", "scope": "floor"}, "kitchen", "")
+        is None
+    )
+    assert subentry_leader_labels({"feature": "  ", "scope": "global"}, "", "") is None
 
 
 @pytest.mark.parametrize(
