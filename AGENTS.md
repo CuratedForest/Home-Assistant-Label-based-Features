@@ -40,10 +40,56 @@ automations and scripts are unchanged YAML and must keep working.
 ```
 custom_components/labeled_features/ -> the integration (see its AGENTS.md)
 tests/                              -> pytest-homeassistant-custom-component suite (see its AGENTS.md)
+skills/                             -> self-managed skills (labeled-features system docs)
+.agents/agent/                      -> plan + code agent definitions
+.agents/skills/                     -> third-party skills managed by skillfish (don't hand-edit)
+.agents/plans/                        -> plan documents (yyyy-mm-dd-<type>-<short-desc>.md)
 .github/workflows/validate.yaml     -> hassfest + HACS validation (CI only)
 hacs.json, README.md                -> HACS metadata and user/migration docs
 pytest.ini, ruff.toml, requirements_test.txt -> tool config (no pyproject.toml)
 ```
+
+## Agents
+
+- `plan` (`.agents/agent/plan.md`) — writes implementation-ready plans to
+  `.agents/plans/`. Use before any non-trivial change.
+- `code` (`.agents/agent/code.md`) — executes plans. Runs in fresh sessions:
+  the plan file tells it which skills and MCP servers to load.
+
+## Skills registry
+
+Load with the `skill` tool. Everything here is task-triggered. Skills an agent
+loads unconditionally live in that agent's file (`.agents/agent/`), not here.
+
+| Skill | Load when | Notes |
+|---|---|---|
+| `labeled-features` | Any work on the label grammar, the `labeled_feature_*` YAML consumers, dispatch/area features, or docs-vs-YAML parity | self-managed (`skills/`) |
+| `ha-integration-dev` | Custom-integration development patterns (config flow, coordinator, registries, tests) | |
+| `home-assistant-yaml` | HA YAML syntax questions (2026 triggers/conditions/actions) | |
+| `home-assistant-best-practices` | Automation/helper choices, safe refactoring of existing config | |
+| `esphome` | ESPHome device configs and firmware | |
+| `ha-dashboard-design` | Dashboard styling, card-mod CSS, themes | |
+| `api-catalog` | Connecting external APIs to Home Assistant | |
+
+## MCP servers
+
+Named `readonly|admin-<cluster>-<service>` (defined in `~/.config/kilo/kilo.jsonc`).
+
+| Server | Use when |
+|---|---|
+| `readonly-global-homeassistant` / `admin-global-homeassistant` | Inspecting the live HA instance this component runs in — verifying labels, entities, sensor attributes, and UI-registry objects (e.g. the UI-managed `Labeled Feature Button` script) |
+| `global-searxng` | Web search: HA docs, integration docs |
+| `global-playwright` | JS-heavy doc sites, UI verification |
+
+**Keep these lists current:** when a task uses a skill or MCP server not listed
+above, add a line to this file (or the relevant agent file) as part of your
+change.
+
+## Plans
+
+Plans live in `.agents/plans/` named `yyyy-mm-dd-<type>-<short-desc>.md`
+(`<type>` = `feat`|`bug`|`debug`|`dep`|…) — never a unix epoch timestamp.
+Every plan has a section that names the skills and MCP servers the Code agent must load.
 
 ## Golden Samples (follow these patterns)
 | For | Reference | Key patterns |
@@ -108,6 +154,8 @@ pytest.ini, ruff.toml, requirements_test.txt -> tool config (no pyproject.toml)
 - Emit more than one state write per logical tick — consumers diff `from_state`/`to_state`
 - Edit files under `/home/coder/HomeAssistant/` or `/home/coder/CuratedForest.com/` (reference only, outside this repo)
 - Push directly to `main` — open a PR
+- Merge your branch into `main` — to pick up changes, merge `main` *into*
+  your branch/worktree; landing work on `main` is the user's decision alone
 - Force-push without `--force-with-lease`
 
 ## Codebase State
