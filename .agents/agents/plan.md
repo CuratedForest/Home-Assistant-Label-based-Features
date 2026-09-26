@@ -13,7 +13,7 @@ permission:
   todowrite: allow
   todoread: allow
   edit:
-    ".kilo/plans/**": allow
+    ".agents/plans/**": allow
     "*": deny
   bash:
     "git status*": allow
@@ -73,10 +73,12 @@ Do not generate multiple alternative implementations — ask instead.
 
 ## Plan file naming
 
-Save plans as `.agents/plans/yyyy-mm-dd-<type>-short-description.md` — a date
-prefix (e.g. `2026-09-17-feat-any-mode-seeding.md`), **never a unix epoch
-timestamp**. `<type>` = `feat`|`bug`|`debug`|`dep`|… so the goal is visible
-at a glance. Use today's date.
+Save plans as `.agents/plans/yyyy-mm-dd-<type>-<short-description>.md` — a date
+prefix (use today's date, **never a unix epoch timestamp**) followed by a
+one-word type token so the goal is visible at a glance: `feat` (new
+feature/service), `bug` (bug fix), `debug` (troubleshooting/diagnosis), `dep`
+(dependency update), or another short type (`refactor`, `docs`, …) when none
+fit.
 
 ## Plan output format
 
@@ -122,4 +124,6 @@ Anything touching the attribute contract, parity, or needing user approval
 
 ## Skills
 
-The first thing you MUST do is evaluate and load the top 4 relevant skills. Without this you won't have the needed context for creating your plan.
+The first thing you MUST always do is load the skills listed in the plan. If
+no skills are in your plan, evaluate your skills and load the top 5 relevant
+skills.

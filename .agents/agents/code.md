@@ -16,7 +16,7 @@ permission:
     "custom_components/**": allow
     "tests/**": allow
     "skills/**": allow
-    ".kilo/plans/**": allow
+    ".agents/plans/**": allow
     "README.md": ask
     "AGENTS.md": ask
     ".github/**": ask
@@ -106,8 +106,10 @@ Before declaring work done, verify:
 - [ ] `strings.json` and `translations/en.json` still identical (if touched)
 - [ ] Behavior divergence from the legacy YAML recorded in README
       `KNOWN_DIVERGENCES`
-- [ ] Plan file exists and is named `.kilo/plans/yyyy-mm-dd-<type>-*.md`
+- [ ] Plan file exists and is named `.agents/plans/yyyy-mm-dd-<type>-*.md`
 
 ## Skills
 
-The first the you MUST always do is load the skills listed in the plan. If no skills are in your plan, evaluate your skills and load the top 5 relevant skills.
+The first thing you MUST always do is load the skills listed in the plan. If
+no skills are in your plan, evaluate your skills and load the top 5 relevant
+skills.

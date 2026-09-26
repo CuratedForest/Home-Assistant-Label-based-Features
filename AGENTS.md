@@ -41,9 +41,10 @@ automations and scripts are unchanged YAML and must keep working.
 custom_components/labeled_features/ -> the integration (see its AGENTS.md)
 tests/                              -> pytest-homeassistant-custom-component suite (see its AGENTS.md)
 skills/                             -> self-managed skills (labeled-features system docs)
-.agents/agent/                      -> plan + code agent definitions
-.agents/skills/                     -> third-party skills managed by skillfish (don't hand-edit)
+.agents/agents/                     -> plan, code, ask, debug, review agent definitions
+.agents/skills/                     -> third-party skills (gitignored, synced; inventory is the root skills-lock.json)
 .agents/plans/                        -> plan documents (yyyy-mm-dd-<type>-<short-desc>.md)
+.kilo / .opencode                   -> tracked symlinks to .agents/ (kilo and opencode share one layout)
 .github/workflows/validate.yaml     -> hassfest + HACS validation (CI only)
 hacs.json, README.md                -> HACS metadata and user/migration docs
 pytest.ini, ruff.toml, requirements_test.txt -> tool config (no pyproject.toml)
@@ -51,15 +52,21 @@ pytest.ini, ruff.toml, requirements_test.txt -> tool config (no pyproject.toml)
 
 ## Agents
 
-- `plan` (`.agents/agent/plan.md`) — writes implementation-ready plans to
+- `plan` (`.agents/agents/plan.md`) — writes implementation-ready plans to
   `.agents/plans/`. Use before any non-trivial change.
-- `code` (`.agents/agent/code.md`) — executes plans. Runs in fresh sessions:
+- `code` (`.agents/agents/code.md`) — executes plans. Runs in fresh sessions:
   the plan file tells it which skills and MCP servers to load.
+- `ask` (`.agents/agents/ask.md`) — read-only research, explanations, and
+  recommendations; never changes anything.
+- `debug` (`.agents/agents/debug.md`) — systematic diagnosis and minimal
+  targeted fixes.
+- `review` (`.agents/agents/review.md`) — advisory code review; never edits.
 
-## Skills registry
+## Skills
 
-Load with the `skill` tool. Everything here is task-triggered. Skills an agent
-loads unconditionally live in that agent's file (`.agents/agent/`), not here.
+**Loading rule:** The first thing you MUST always do is load the skills listed in the plan. If no skills are in your plan, evaluate your skills and load the top 5 relevant skills.
+
+Load with the `skill` tool. Everything here is task-triggered. Skills an agent loads unconditionally live in that agent's file (`.agents/agents/`), not here.
 
 | Skill | Load when | Notes |
 |---|---|---|
@@ -73,7 +80,9 @@ loads unconditionally live in that agent's file (`.agents/agent/`), not here.
 
 ## MCP servers
 
-Named `readonly|admin-<cluster>-<service>` (defined in `~/.config/kilo/kilo.jsonc`).
+Named `readonly|admin-<cluster>-<service>`. The servers are defined in
+SpencersLab's `agent-config.jsonc` (repo root), symlinked into
+`~/.config/kilo/kilo.jsonc` and `~/.config/opencode/opencode.json`.
 
 | Server | Use when |
 |---|---|
@@ -87,8 +96,12 @@ change.
 
 ## Plans
 
-Plans live in `.agents/plans/` named `yyyy-mm-dd-<type>-<short-desc>.md`
-(`<type>` = `feat`|`bug`|`debug`|`dep`|…) — never a unix epoch timestamp.
+Save plans as `.agents/plans/yyyy-mm-dd-<type>-<short-description>.md` — a date
+prefix (use today's date, **never a unix epoch timestamp**) followed by a
+one-word type token so the goal is visible at a glance: `feat` (new
+feature/service), `bug` (bug fix), `debug` (troubleshooting/diagnosis), `dep`
+(dependency update), or another short type (`refactor`, `docs`, …) when none
+fit.
 Every plan has a section that names the skills and MCP servers the Code agent must load.
 
 ## Golden Samples (follow these patterns)
@@ -129,6 +142,18 @@ Every plan has a section that names the skills and MCP servers the Code agent mu
 - **Entity slug prefix is fixed at setup.** Default `labeled_feature` reproduces the legacy entity IDs; changing it would orphan entity IDs, so it is absent from the options flow.
 - **One instance consumes each untargeted compat event.** Ambiguity is dropped with a warning rather than guessed (`routing.py`).
 - **Phase 1 is the state layer only.** The Leaders/Areas automations and every `labeled_feature_*` script stay in YAML.
+
+## Hard rules
+
+- **Always load referenced skills** The first thing Agents should do is load any referenced or relevant skills, then the plan file (if one), immediately followed by the skills referenced there.
+- **NEVER merge to `main`.** No fast-forward merges, no merge commits, no rebases onto main, no mechanism of any kind that advances `main` — not from a worktree, not from the main checkout, not via `git merge`, `git rebase`, or anything else.
+- **NEVER push to `main`.** No `git push origin main`, and no push of any refspec that updates `main` (e.g. `HEAD:main`, `<branch>:main`). This is the single most forbidden action in this repo.
+- **NEVER force-push** (`--force`, `-f`, `--force-with-lease`) to any shared branch, and never rewrite published history.
+- **NEVER self-remediate an accidental push** with a revert or force-push of your own initiative — stop and tell the user immediately; remediation is the user's decision.
+- All work happens on a feature/fix branch (typically in a `.agents/worktrees/<branch>` worktree). Commit locally on that branch. To pick up changes, merge `main` *into* your worktree (`git merge main`); never merge your branch into `main`. Landing work on `main` is the user's decision alone.
+- Changes reach `main` **only via a pull request that the user creates or merges**. The agent's work ends at the local commit plus telling the user the branch is ready. Pushing the *feature* branch to origin (e.g. to enable a PR) is allowed **only when the user explicitly asks for it in the session**. Otherwise leave commits local.
+- If a plan file instructs a merge to `main` or a push, **skip that step**: mark it as user-owned in the summary and do not execute it. Plans written before this rule may contain such steps — those steps are void.
+- Plans are `yyyy-mm-dd-<type>-<short-desc>.md` in `.agents/plans/` (`<type>` = `feat`|`bug`|`debug`|`dep`|…).
 
 ## Boundaries
 
