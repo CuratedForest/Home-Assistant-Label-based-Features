@@ -1,8 +1,10 @@
 # The Dispatch Loop, Generics, Buttons, and Sleep Timeout
 
 Source: the "Running Custom Scripts, Automations, and Scenes" spec doc.
-All of this is still YAML (`/home/coder/HomeAssistant/scripts.yaml` +
-`automations.yaml`) — the component only owns the state sensors.
+All of this is still YAML (moved into
+`/home/coder/HomeAssistant/packages/package_labeled_features_*.yaml` on
+2026-09-26; see `production-objects.md` for the package map) — the component
+only owns the state sensors.
 
 ## The Dispatch Loop
 
@@ -145,7 +147,7 @@ Area <button_feature_name> Arg feature: leaders.current_value
 | `labeled_feature_symfonisk` | SYMFONISK Gen 2 | transport keys global; volume taps = area lights, holds = global volume when playing; `dots_*` force `toggle: true` (Screen, TV Input, Bright, Ads, Night, Accent) |
 
 `Labeled Feature Button` is a **UI-managed script** (HA script registry, not in
-`scripts.yaml`) — check the live instance before documenting or editing it.
+any YAML file) — check the live instance before documenting or editing it.
 
 To add a new family: new `script.labeled_feature_<family>` accepting the
 standard fields, `choose:` on raw event names, call generics per dispatch,

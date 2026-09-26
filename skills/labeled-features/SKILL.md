@@ -20,9 +20,9 @@ behavior; where they disagree, reproduce the YAML** (see README
 |---|---|---|
 | Labeled Features State sensor | **Custom component** (`custom_components/labeled_features`) — replaces the trigger-based template sensor | `sensor.labeled_features_state` |
 | Labeled Feature Areas State sensor | **Custom component** — replaces the template sensor | `sensor.labeled_feature_areas_state` |
-| Error handling (silent/log/alert/stop tiers) | **Both** — component handles its own paths (`errors.py`, `labeled_features.error_mode` action); existing YAML scripts keep calling `script.labeled_feature_error_mode` — do not replace it in the scripts | `errors.py` + `scripts.yaml` |
-| Leaders automation, Areas automation | YAML (unchanged consumers) | `/home/coder/HomeAssistant/automations.yaml` |
-| Follower / Generics / Area / Entities / button-mapping / Sleep Timeout scripts | YAML (unchanged consumers) | `/home/coder/HomeAssistant/scripts.yaml` |
+| Error handling (silent/log/alert/stop tiers) | **Both** — component handles its own paths (`errors.py`, `labeled_features.error_mode` action); existing YAML scripts keep calling `script.labeled_feature_error_mode` — do not replace it in the scripts | `errors.py` + `packages/package_labeled_features_error_mode.yaml` |
+| Leaders automation, Areas automation | YAML (unchanged consumers; moved out of `automations.yaml` 2026-09-26) | `/home/coder/HomeAssistant/packages/package_labeled_features_dispatch.yaml`, `package_labeled_features_areas.yaml` |
+| Follower / Generics / Area / Entities / button-mapping / Sleep Timeout scripts | YAML (unchanged consumers; moved out of `scripts.yaml` 2026-09-26) | `/home/coder/HomeAssistant/packages/package_labeled_features_*.yaml` (one package per subsystem; see `references/production-objects.md`) |
 
 The component is Phase 1 (state layer only). Migrating the automations/scripts
 into the component is Phase 2+ and requires explicit approval.
@@ -99,7 +99,9 @@ into the component is Phase 2+ and requires explicit approval.
 
 - Spec docs (target design): `/home/coder/CuratedForest.com/content/tech/
   home-assistant/label-based-features/` — **read-only, outside this repo**.
-- Production YAML (current behavior): `/home/coder/HomeAssistant/
-  {configuration,automations,scripts}.yaml` — **read-only, outside this repo**.
+- Production YAML (current behavior): `/home/coder/HomeAssistant/` — the
+  Label Based Features objects live in `packages/package_labeled_features_*.yaml`
+  (moved 2026-09-26; see `references/production-objects.md`) — **read-only,
+  outside this repo**.
 - Component contract: `custom_components/labeled_features/AGENTS.md` and
   README `KNOWN_DIVERGENCES`.
